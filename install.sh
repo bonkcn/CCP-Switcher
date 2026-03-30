@@ -115,8 +115,8 @@ WorkingDirectory=${REPO_DIR}
 ExecStart=${BIN_PATH}
 Restart=always
 RestartSec=3
-Environment=AI_CLI_MANAGER_LISTEN=${LISTEN_ADDR}
-Environment=AI_CLI_MANAGER_DATA_DIR=${DATA_DIR}
+Environment=CCP_SWITCHER_LISTEN=${LISTEN_ADDR}
+Environment=CCP_SWITCHER_DATA_DIR=${DATA_DIR}
 
 [Install]
 WantedBy=multi-user.target

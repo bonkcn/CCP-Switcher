@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ import (
 	"github.com/bonkcn/ccp-switcher/internal/store"
 )
 
-const sessionCookieName = "ai_cli_manager_session"
+const sessionCookieName = "ccp_switcher_session"
 
 //go:embed templates/*.html static/*
 var assets embed.FS
@@ -29,6 +30,7 @@ type Server struct {
 	sessions *SessionManager
 	logger   *log.Logger
 	tmpl     *template.Template
+	repoDir  string
 }
 
 type viewData struct {
@@ -57,6 +59,7 @@ type viewData struct {
 	CodexConfigPath string
 	CodexAuthPath   string
 	Probe           *providerProbeView
+	Version         *versionStatusView
 }
 
 type providerProbeView struct {
@@ -85,6 +88,8 @@ func NewServer(cfg app.Config, st *store.Store, manager *runtimecfg.Manager, log
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 
+	repoDir, _ := os.Getwd()
+
 	return &Server{
 		cfg:      cfg,
 		store:    st,
@@ -92,6 +97,7 @@ func NewServer(cfg app.Config, st *store.Store, manager *runtimecfg.Manager, log
 		sessions: NewSessionManager(24 * time.Hour),
 		logger:   logger,
 		tmpl:     tmpl,
+		repoDir:  repoDir,
 	}, nil
 }
 
@@ -120,6 +126,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /settings", s.authenticated(s.handleSettings))
 	mux.HandleFunc("POST /settings/password", s.authenticated(s.handlePasswordUpdate))
 	mux.HandleFunc("POST /settings/token", s.authenticated(s.handleTokenRotate))
+	mux.HandleFunc("POST /settings/version/check", s.authenticated(s.handleVersionCheck))
+	mux.HandleFunc("POST /settings/update", s.authenticated(s.handleSelfUpdate))
 	mux.HandleFunc("GET /history", s.authenticated(s.handleHistory))
 	return mux
 }
@@ -488,14 +496,7 @@ func (s *Server) handleRuntimeStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
-	s.render(w, http.StatusOK, viewData{
-		Title:           "Settings",
-		CurrentPath:     "/settings",
-		ContentTemplate: "settings.html",
-		Notice:          r.URL.Query().Get("notice"),
-		Error:           r.URL.Query().Get("error"),
-		BootstrapPath:   s.cfg.BootstrapCredentialsPath,
-	})
+	s.renderSettingsPage(w, http.StatusOK, r.URL.Query().Get("notice"), r.URL.Query().Get("error"), "", false)
 }
 
 func (s *Server) handlePasswordUpdate(w http.ResponseWriter, r *http.Request) {
@@ -522,14 +523,28 @@ func (s *Server) handleTokenRotate(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	s.render(w, http.StatusOK, viewData{
-		Title:           "Settings",
-		CurrentPath:     "/settings",
-		ContentTemplate: "settings.html",
-		Notice:          "API Token 已轮换重置。请立即复制，刷新后将不再显示。",
-		GeneratedToken:  token,
-		BootstrapPath:   s.cfg.BootstrapCredentialsPath,
-	})
+	s.renderSettingsPage(w, http.StatusOK, "API Token 已轮换重置。请立即复制，刷新后将不再显示。", "", token, false)
+}
+
+func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
+	s.renderSettingsPage(w, http.StatusOK, "版本检查已完成", "", "", true)
+}
+
+func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
+	version := inspectVersionStatus(s.repoDir, false)
+	unitName, err := triggerSelfUpdate(s.cfg, version)
+	if err != nil {
+		s.renderSettingsPage(w, http.StatusInternalServerError, "", "启动更新失败: "+err.Error(), "", true)
+		return
+	}
+	s.renderSettingsPage(
+		w,
+		http.StatusOK,
+		"更新任务已提交: "+unitName+"。服务将在重新编译后自动重启，页面可能短暂断开，请稍后刷新并再次检查版本。",
+		"",
+		"",
+		true,
+	)
 }
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
@@ -546,6 +561,23 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		Error:           r.URL.Query().Get("error"),
 		Logs:            logs,
 	})
+}
+
+func (s *Server) renderSettingsPage(w http.ResponseWriter, status int, notice string, errorMessage string, generatedToken string, checkRemote bool) {
+	s.render(w, status, s.settingsViewData(notice, errorMessage, generatedToken, checkRemote))
+}
+
+func (s *Server) settingsViewData(notice string, errorMessage string, generatedToken string, checkRemote bool) viewData {
+	return viewData{
+		Title:           "Settings",
+		CurrentPath:     "/settings",
+		ContentTemplate: "settings.html",
+		Notice:          notice,
+		Error:           errorMessage,
+		GeneratedToken:  generatedToken,
+		BootstrapPath:   s.cfg.BootstrapCredentialsPath,
+		Version:         inspectVersionStatus(s.repoDir, checkRemote),
+	}
 }
 
 func (s *Server) authenticated(next http.HandlerFunc) http.HandlerFunc {

@@ -217,6 +217,17 @@ dd code, td code, .details code { display: inline-block; padding: 2px 6px; borde
 .token-box strong { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
 .token-box code { font-size: 14px; padding: 8px 12px; display: block; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 8px;}
 
+.settings-version-panel { display: grid; gap: 18px; }
+.settings-version-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.settings-version-head h2 { margin-bottom: 8px; }
+.settings-version-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.settings-version-actions form { margin: 0; }
+.settings-version-grid { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.version-card { padding: 16px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-strong); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.version-card strong { font-size: 16px; color: var(--text); word-break: break-word; }
+.version-card code { display: inline-block; margin-top: 4px; }
+.version-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
 /* details summary arrow */
 details > summary { list-style: none; user-select: none; display: flex; align-items: center; }
 details > summary::-webkit-details-marker { display: none; }
@@ -335,6 +346,11 @@ details[open] > summary::before { transform: rotate(90deg); }
   .hero { flex-direction: column; align-items: flex-start; gap: 16px; text-align: left; }
   .hero .actions { margin-left: 0; width: 100%; }
   .hero .actions .button { flex: 1; }
+  .settings-version-head { flex-direction: column; }
+  .settings-version-actions { width: 100%; justify-content: stretch; }
+  .settings-version-actions form { flex: 1; }
+  .settings-version-actions .button { width: 100%; }
+  .settings-version-grid { grid-template-columns: 1fr; }
   .meta-grid { grid-template-columns: 1fr; }
   .table-wrap { display: block; overflow-x: auto; white-space: nowrap; }
   .card-head { flex-direction: column; }
