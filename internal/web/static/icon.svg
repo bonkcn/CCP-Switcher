@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">CCP Switcher</title>
+  <desc id="desc">A routing switch icon for CCP Switcher.</desc>
+  <defs>
+    <linearGradient id="bg" x1="12" y1="10" x2="84" y2="86" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#334155"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="24" y1="68" x2="72" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="80" height="80" rx="24" fill="url(#bg)"/>
+  <path d="M24 30h48" fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-width="10"/>
+  <path d="M24 66h48" fill="none" stroke="#cbd5e1" stroke-linecap="round" stroke-width="10"/>
+  <path d="M30 66c16 0 16-36 36-36" fill="none" stroke="url(#accent)" stroke-linecap="round" stroke-width="10"/>
+  <circle cx="24" cy="30" r="6" fill="#f8fafc"/>
+  <circle cx="72" cy="30" r="6" fill="#f8fafc"/>
+  <circle cx="24" cy="66" r="6" fill="#f59e0b"/>
+  <circle cx="72" cy="66" r="6" fill="#cbd5e1"/>
+</svg>

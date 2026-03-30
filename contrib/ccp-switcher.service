@@ -1,0 +1,16 @@
+[Unit]
+Description=CCP Switcher WebUI
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/ccp-switcher
+ExecStart=/usr/local/bin/ccp-switcher
+Restart=always
+RestartSec=3
+Environment=AI_CLI_MANAGER_LISTEN=127.0.0.1:4680
+Environment=AI_CLI_MANAGER_DATA_DIR=/root/.ccp-switcher
+
+[Install]
+WantedBy=multi-user.target

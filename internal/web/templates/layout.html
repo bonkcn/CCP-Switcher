@@ -1,0 +1,173 @@
+{{define "layout.html"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} | CCP Switcher</title>
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"><img src="/static/icon.svg" alt="CCP Switcher"></span>
+        <div>
+          <h1>CCP Switcher</h1>
+          <p>Claude Code Provider Switcher</p>
+        </div>
+      </div>
+      {{if ne .CurrentPath "/login"}}
+      <form method="post" action="/logout">
+        <button class="button secondary" type="submit">退出</button>
+      </form>
+      {{end}}
+    </header>
+
+    {{if ne .CurrentPath "/login"}}
+    <nav class="nav">
+      <a class="{{if eq .CurrentPath "/"}}active{{end}}" href="/">概览</a>
+      <a class="{{if eq .CurrentPath "/providers"}}active{{end}}" href="/providers">供应商</a>
+      <a class="{{if eq .CurrentPath "/history"}}active{{end}}" href="/history">历史</a>
+      <a class="{{if eq .CurrentPath "/settings"}}active{{end}}" href="/settings">设置</a>
+    </nav>
+    {{end}}
+
+    {{if .Notice}}<div id="server-msg" data-type="success" style="display:none">{{.Notice}}</div>{{end}}
+    {{if .Error}}<div id="server-msg" data-type="error" style="display:none">{{.Error}}</div>{{end}}
+
+    <main class="content">
+      {{.Content}}
+    </main>
+  </div>
+  
+  <div id="toast-container"></div>
+  
+  <script>
+    function showToast(msg, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.innerHTML = `<span class="toast-icon">${type === 'success' ? '✓' : '✗'}</span><span>${msg}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 4000);
+    }
+
+    function initPage() {
+      const serverMsg = document.getElementById('server-msg');
+      if (serverMsg) {
+         showToast(serverMsg.innerText, serverMsg.getAttribute('data-type'));
+         serverMsg.remove();
+      }
+    }
+    
+    initPage();
+
+    document.addEventListener('click', async (e) => {
+      const selectBtn = e.target.closest('[data-select-model]');
+      if (selectBtn) {
+        const value = (selectBtn.getAttribute('data-select-model') || '').trim();
+        const input = document.querySelector('#probe-model-input');
+        const display = document.querySelector('#probe-model-display');
+        if (input) input.value = value;
+        if (display) display.textContent = value || '未选择';
+        document.querySelectorAll('.model-row').forEach((row) => {
+          row.classList.toggle('model-row-selected', row.querySelector('[data-select-model]')?.getAttribute('data-select-model') === value);
+        });
+        document.querySelectorAll('.selected-model-actions button').forEach((button) => {
+          button.disabled = !value;
+        });
+        return;
+      }
+
+      const copyTextBtn = e.target.closest('[data-copy-text]');
+      const copyTargetBtn = e.target.closest('[data-copy-target]');
+      if (!copyTextBtn && !copyTargetBtn) return;
+
+      let text = '';
+      if (copyTextBtn) {
+        text = copyTextBtn.getAttribute('data-copy-text') || '';
+      } else if (copyTargetBtn) {
+        const selector = copyTargetBtn.getAttribute('data-copy-target');
+        const target = selector ? document.querySelector(selector) : null;
+        if (target && 'value' in target) {
+          text = target.value || '';
+        } else if (target) {
+          text = target.textContent || '';
+        }
+      }
+
+      text = text.trim();
+      if (!text) {
+        showToast('没有可复制的内容', 'error');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('模型名称已复制', 'success');
+      } catch (err) {
+        showToast('复制失败: ' + err.message, 'error');
+      }
+    });
+
+    document.addEventListener('submit', async (e) => {
+      const form = e.target;
+      if (form.method.toUpperCase() !== 'POST') return;
+      
+      // Opt-out forms
+      if (form.action.includes('/login') || form.action.includes('/logout') || form.getAttribute('data-no-ajax') === 'true') {
+        return;
+      }
+      
+      e.preventDefault();
+      
+      const submitBtn = e.submitter || (document.activeElement && document.activeElement.tagName === 'BUTTON' ? document.activeElement : form.querySelector('button[type="submit"]'));
+      const action = submitBtn && submitBtn.getAttribute('formaction') ? submitBtn.getAttribute('formaction') : form.action;
+      const method = submitBtn && submitBtn.getAttribute('formmethod') ? submitBtn.getAttribute('formmethod') : form.method;
+      if (submitBtn) submitBtn.classList.add('is-loading');
+
+      try {
+        const formData = new FormData(form, submitBtn || undefined);
+        const urlParams = new URLSearchParams(formData).toString();
+        
+        const response = await fetch(action, {
+          method: (method || 'POST').toUpperCase(),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: urlParams,
+          redirect: 'follow'
+        });
+        
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        if (response.redirected) {
+            window.history.pushState({}, '', response.url);
+        }
+
+        const newContent = doc.querySelector('.content');
+        if (newContent) {
+          document.querySelector('.content').innerHTML = newContent.innerHTML;
+        }
+        
+        const newMsg = doc.getElementById('server-msg');
+        if (newMsg) {
+          showToast(newMsg.innerText, newMsg.getAttribute('data-type'));
+        } else if (!response.ok) {
+          showToast(`请求失败: HTTP ${response.status}`, 'error');
+        }
+        
+      } catch (err) {
+        showToast('请求出错: ' + err.message, 'error');
+      } finally {
+        if (submitBtn && document.contains(submitBtn)) {
+          submitBtn.classList.remove('is-loading');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
+{{end}}

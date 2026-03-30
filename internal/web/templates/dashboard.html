@@ -1,0 +1,147 @@
+{{define "dashboard.html"}}
+<section class="grid two" style="margin-bottom: 24px; align-items: start;">
+  
+  <!-- 左侧列：CLI 控制与核心写入策略 -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <!-- CLI 控制面板放在最醒目的位置 -->
+    <article class="panel" style="margin-bottom: 0;">
+      <h2>CLI 运行控制</h2>
+      <div class="table-wrap" style="border: none; border-bottom: 1px solid var(--border);">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>服务</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong style="color: var(--text);">Claude CLI</strong>
+                <div class="subtle">{{if .ClaudeStatus.BinaryFound}}<code style="font-size: 11px;">{{.ClaudeStatus.BinaryPath}}</code>{{else}}未检测到命令{{end}}</div>
+              </td>
+              <td>
+                 {{if .ClaudeStatus.Running}}
+                   <span class="pill status-ok">运行中</span>
+                 {{else}}
+                   <span class="pill status-neutral">已停止</span>
+                 {{end}}
+              </td>
+              <td class="actions">
+                {{if .ClaudeStatus.Running}}
+                <form method="post" action="/runtime/claude/stop"><button class="button danger small" type="submit">停止</button></form>
+                {{else}}
+                <form method="post" action="/runtime/claude/launch"><button class="button small" type="submit">启动</button></form>
+                {{end}}
+              </td>
+            </tr>
+            <tr>
+              <td style="border-bottom: none;">
+                <strong style="color: var(--text);">Codex CLI</strong>
+                <div class="subtle">{{if .CodexStatus.BinaryFound}}<code style="font-size: 11px;">{{.CodexStatus.BinaryPath}}</code>{{else}}未检测到命令{{end}}</div>
+              </td>
+              <td style="border-bottom: none;">
+                 {{if .CodexStatus.Running}}
+                   <span class="pill status-ok">运行中</span>
+                 {{else}}
+                   <span class="pill status-neutral">已停止</span>
+                 {{end}}
+              </td>
+              <td class="actions" style="border-bottom: none;">
+                {{if .CodexStatus.Running}}
+                <form method="post" action="/runtime/codex/stop"><button class="button danger small" type="submit">停止</button></form>
+                {{else}}
+                <form method="post" action="/runtime/codex/launch"><button class="button small" type="submit">启动</button></form>
+                {{end}}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <!-- 配置写入策略 -->
+    <article class="panel" style="margin-bottom: 0;">
+      <h2 style="margin-bottom: 16px;">配置写入与接管策略</h2>
+      <div class="grid two" style="gap: 16px;">
+        <div style="background: var(--bg-accent); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <strong style="font-size: 14px; color: var(--text);">Claude 策略</strong>
+            <span class="pill {{if .ClaudeManaged.Compatible}}status-ok{{else}}status-neutral{{end}}">{{.ClaudeManaged.Mode}}</span>
+          </div>
+          <div class="pre subtle" style="font-size: 12px; margin: 0; white-space: pre-wrap;">{{.ClaudeManaged.Details}}</div>
+        </div>
+
+        <div style="background: var(--bg-accent); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <strong style="font-size: 14px; color: var(--text);">Codex 策略</strong>
+            <span class="pill {{if .CodexManaged.Compatible}}status-ok{{else}}status-neutral{{end}}">{{.CodexManaged.Mode}}</span>
+          </div>
+          <div class="pre subtle" style="font-size: 12px; margin: 0; white-space: pre-wrap;">{{.CodexManaged.Details}}</div>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <!-- 右侧列：当前生效的供应商信息 -->
+  <div style="display: flex; flex-direction: column; gap: 24px;">
+    <article class="panel" style="margin-bottom: 0;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+        <div>
+          <span class="eyebrow">当前接入层</span>
+          <h2 style="margin: 0; border: none; padding: 0;">Claude 供应商</h2>
+        </div>
+        <a class="button secondary small" href="/providers">去管理库更换</a>
+      </div>
+      {{if .ActiveClaude}}
+      <dl class="meta-grid">
+        <div><dt>名称</dt><dd>{{.ActiveClaude.Name}}</dd></div>
+        <div><dt>模式</dt><dd>{{.ActiveClaude.ClaudeDefaultMode}}</dd></div>
+        <div style="grid-column: span 2;"><dt>Base URL</dt><dd><code>{{.ActiveClaude.BaseURL}}</code></dd></div>
+        <div style="grid-column: span 2;"><dt>Key</dt><dd><code>{{maskSecret .ActiveClaude.Secret}}</code></dd></div>
+      </dl>
+      {{else}}
+      <div class="provider-empty" style="padding: 24px 12px; border: 1px dashed var(--border-strong);">
+        <h3 style="font-size: 15px;">未设置 Claude</h3>
+        <p class="subtle" style="margin: 0;">请前往“供应商”库设置并切换生效。</p>
+      </div>
+      {{end}}
+    </article>
+
+    <article class="panel" style="margin-bottom: 0;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+        <div>
+          <span class="eyebrow">当前推理层</span>
+          <h2 style="margin: 0; border: none; padding: 0;">Codex 供应商</h2>
+        </div>
+        <a class="button secondary small" href="/providers">去管理库更换</a>
+      </div>
+      {{if .ActiveCodex}}
+      <dl class="meta-grid">
+        <div><dt>名称</dt><dd>{{.ActiveCodex.Name}}</dd></div>
+        <div><dt>模型</dt><dd>{{if .ActiveCodex.Model}}{{.ActiveCodex.Model}}{{else}}-{{end}}</dd></div>
+        <div style="grid-column: span 2;"><dt>Base URL</dt><dd><code>{{.ActiveCodex.BaseURL}}</code></dd></div>
+        <div style="grid-column: span 2;"><dt>Key</dt><dd><code>{{maskSecret .ActiveCodex.Secret}}</code></dd></div>
+      </dl>
+      {{else}}
+      <div class="provider-empty" style="padding: 24px 12px; border: 1px dashed var(--border-strong);">
+        <h3 style="font-size: 15px;">未设置 Codex</h3>
+        <p class="subtle" style="margin: 0;">请前往“供应商”库设置并切换生效。</p>
+      </div>
+      {{end}}
+    </article>
+  </div>
+</section>
+
+<!-- 诊断逻辑及路径信息 -->
+<article class="panel" style="margin-bottom: 24px; padding: 24px;">
+  <h2 style="font-size: 15px; color: var(--text-secondary); margin-bottom: 16px;">诊断与本机底层配置路径</h2>
+  <dl class="details" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+    <div style="border: none; padding: 0; flex-direction: column; align-items: flex-start; gap: 4px;"><dt>内网监听地址</dt><dd><code>{{.ListenAddr}}</code></dd></div>
+    <div style="border: none; padding: 0; flex-direction: column; align-items: flex-start; gap: 4px;"><dt>Claude Settings.json 配置文件</dt><dd><code style="font-size: 11px;">{{.ClaudePath}}</code></dd></div>
+    <div style="border: none; padding: 0; flex-direction: column; align-items: flex-start; gap: 4px;"><dt>Codex Config.toml 配置文件</dt><dd><code style="font-size: 11px;">{{.CodexConfigPath}}</code></dd></div>
+    <div style="border: none; padding: 0; flex-direction: column; align-items: flex-start; gap: 4px;"><dt>Codex Auth.json 持久化凭据</dt><dd><code style="font-size: 11px;">{{.CodexAuthPath}}</code></dd></div>
+  </dl>
+</article>
+{{end}}

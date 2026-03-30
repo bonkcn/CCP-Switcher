@@ -4,7 +4,7 @@ set -u
 set -o pipefail
 
 SCRIPT_NAME="$(basename "$0")"
-MANAGER_DIR="${HOME}/.ai-cli-manager"
+MANAGER_DIR="${HOME}/.ccp-switcher"
 BACKUP_DIR="${MANAGER_DIR}/backups"
 CLAUDE_BASHRC_START="# >>> AI_CLI_MANAGER_CLAUDE >>>"
 CLAUDE_BASHRC_END="# <<< AI_CLI_MANAGER_CLAUDE <<<"
@@ -614,7 +614,7 @@ main_loop() {
   if [ "$HAS_INTERACTIVE_INPUT" -ne 1 ]; then
     error "当前没有可交互终端，菜单模式无法读取输入。"
     error "请改用以下方式执行："
-    error "1. 先下载: curl -fsSL -o ai_cli_manager.sh https://raw.githubusercontent.com/bonkcn/ai-cli-manager/main/ai_cli_manager.sh"
+    error "1. 先下载: curl -fsSL -o ai_cli_manager.sh https://raw.githubusercontent.com/bonkcn/CCP-Switcher/main/ai_cli_manager.sh"
     error "2. 再运行: bash ai_cli_manager.sh"
     exit 1
   fi

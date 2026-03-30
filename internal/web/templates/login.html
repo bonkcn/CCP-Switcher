@@ -1,0 +1,15 @@
+{{define "login.html"}}
+<section class="panel narrow">
+  <p class="eyebrow">身份验证</p>
+  <h2>登录</h2>
+  <p>Web UI 使用密码登录。脚本调用可使用 Bearer API Token。</p>
+  <form method="post" action="/login" class="stack">
+    <label>
+      <span>密码</span>
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button class="button" type="submit">登录</button>
+  </form>
+  <p class="muted">首次启动生成的凭据文件路径：<code>{{.BootstrapPath}}</code></p>
+</section>
+{{end}}

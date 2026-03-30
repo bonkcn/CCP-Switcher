@@ -1,0 +1,4 @@
+ccp-switcher
+*.log
+*.tmp
+.DS_Store

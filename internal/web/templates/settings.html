@@ -1,0 +1,44 @@
+{{define "settings.html"}}
+<section class="hero panel" style="margin-bottom: 24px;">
+  <div class="hero-copy">
+    <p class="eyebrow">访问控制</p>
+    <h2 style="font-size: 24px; margin: 0 0 8px;">系统设置</h2>
+    <p class="subtle" style="font-size: 14px;">管理 Web UI 的登录凭证以及提供给脚本调用的 Bearer Token。</p>
+  </div>
+</section>
+
+<section class="grid two">
+  <article class="panel">
+    <h2>更新密码</h2>
+    <form method="post" action="/settings/password" class="stack">
+      <label>
+        <span style="font-size: 13px; color: var(--muted);">新密码</span>
+        <input type="password" name="password" autocomplete="new-password" required>
+      </label>
+      <label>
+        <span style="font-size: 13px; color: var(--muted);">确认密码</span>
+        <input type="password" name="confirm_password" autocomplete="new-password" required>
+      </label>
+      <button class="button" type="submit" style="margin-top: 8px;">更新密码</button>
+    </form>
+  </article>
+
+  <article class="panel">
+    <h2>API Token</h2>
+    <p class="subtle" style="margin-bottom: 20px;">Bearer Token 可用于无头环境、自动化脚本或反向代理之后的 API 发起者调用。</p>
+    <form method="post" action="/settings/token">
+      <button class="button secondary" type="submit">重新生成 Token</button>
+    </form>
+    {{if .GeneratedToken}}
+    <div class="token-box">
+      <strong>新生成 Token</strong>
+      <code>{{.GeneratedToken}}</code>
+      <p class="subtle" style="margin-top: 8px;">请立即复制并保存此内容，它将不会再次显示。</p>
+    </div>
+    {{end}}
+    <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+      <p class="muted" style="margin: 0;">首次启动生成的凭据文件：<br><code style="display: block; margin-top: 4px;">{{.BootstrapPath}}</code></p>
+    </div>
+  </article>
+</section>
+{{end}}

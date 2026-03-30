@@ -1,0 +1,105 @@
+{{define "provider_form.html"}}
+<section class="hero form-hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Provider Edit</p>
+    <h2>{{if .Provider.ID}}编辑{{else}}新增{{end}} {{kindLabel .Provider.Kind}} 供应商</h2>
+    <p class="subtle">保存只写入数据库。真正覆盖本机 CLI 配置，要在供应商列表里执行“切换”。</p>
+  </div>
+</section>
+
+<section class="panel form-panel">
+  <form method="post" action="{{if .Provider.ID}}/providers/{{.Provider.ID}}{{else}}/providers{{end}}" class="provider-form">
+    <input type="hidden" name="kind" value="{{.Provider.Kind}}">
+
+    <label>
+      <span class="field-label">显示名称</span>
+      <input type="text" name="name" value="{{.Provider.Name}}" placeholder="eg. Main Gateway" required>
+    </label>
+
+    <label>
+      <span class="field-label">Base URL</span>
+      <input type="url" name="base_url" value="{{.Provider.BaseURL}}" placeholder="https://api.example.com/v1" required>
+    </label>
+
+    <label>
+      <span class="field-label">{{if eq .Provider.Kind "claude"}}认证 Token{{else}}API Key{{end}}</span>
+      <input type="password" name="secret" placeholder="{{if .Provider.ID}}输入新密钥以更新，留空保持原样{{else}}sk-xxxxxxxx{{end}}">
+    </label>
+
+    <label>
+      <span class="field-label">默认模型</span>
+      <input type="text" name="model" value="{{.Provider.Model}}" placeholder="{{if eq .Provider.Kind "claude"}}claude-sonnet-4-20250514{{else}}gpt-5.4{{end}}">
+    </label>
+
+    {{if eq .Provider.Kind "codex"}}
+    <div class="form-grid two">
+      <label>
+        <span class="field-label">Reasoning Effort</span>
+        <select name="reasoning_effort">
+          <option value="" {{if eq .Provider.ReasoningEffort ""}}selected{{end}}>保持当前 / 不额外写入</option>
+          <option value="low" {{if eq .Provider.ReasoningEffort "low"}}selected{{end}}>low</option>
+          <option value="medium" {{if eq .Provider.ReasoningEffort "medium"}}selected{{end}}>medium</option>
+          <option value="high" {{if eq .Provider.ReasoningEffort "high"}}selected{{end}}>high</option>
+          <option value="xhigh" {{if eq .Provider.ReasoningEffort "xhigh"}}selected{{end}}>xhigh</option>
+        </select>
+      </label>
+
+      <label>
+        <span class="field-label">Approval Policy</span>
+        <select name="codex_approval_policy">
+          <option value="on-request" {{if or (eq .Provider.CodexApprovalPolicy "on-request") (eq .Provider.CodexApprovalPolicy "")}}selected{{end}}>on-request</option>
+          <option value="never" {{if eq .Provider.CodexApprovalPolicy "never"}}selected{{end}}>never</option>
+          <option value="untrusted" {{if eq .Provider.CodexApprovalPolicy "untrusted"}}selected{{end}}>untrusted</option>
+          <option value="on-failure" {{if eq .Provider.CodexApprovalPolicy "on-failure"}}selected{{end}}>on-failure</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="form-grid two">
+      <label>
+        <span class="field-label">Sandbox Mode</span>
+        <select name="codex_sandbox_mode">
+          <option value="workspace-write" {{if or (eq .Provider.CodexSandboxMode "workspace-write") (eq .Provider.CodexSandboxMode "")}}selected{{end}}>workspace-write</option>
+          <option value="read-only" {{if eq .Provider.CodexSandboxMode "read-only"}}selected{{end}}>read-only</option>
+          <option value="danger-full-access" {{if eq .Provider.CodexSandboxMode "danger-full-access"}}selected{{end}}>danger-full-access</option>
+        </select>
+      </label>
+
+      <div class="form-note-block">
+        <span class="field-label">执行模式说明</span>
+        <p class="subtle">`YOLO` 等价配置: <code>approval_policy="never"</code> + <code>sandbox_mode="danger-full-access"</code>。</p>
+      </div>
+    </div>
+    {{end}}
+
+    {{if eq .Provider.Kind "claude"}}
+    <label>
+      <span class="field-label">权限模式</span>
+      <select name="claude_default_mode">
+        <option value="default" {{if eq .Provider.ClaudeDefaultMode "default"}}selected{{end}}>default</option>
+        <option value="bypassPermissions" {{if eq .Provider.ClaudeDefaultMode "bypassPermissions"}}selected{{end}}>bypassPermissions</option>
+        <option value="acceptEdits" {{if eq .Provider.ClaudeDefaultMode "acceptEdits"}}selected{{end}}>acceptEdits</option>
+        <option value="dontAsk" {{if eq .Provider.ClaudeDefaultMode "dontAsk"}}selected{{end}}>dontAsk</option>
+        <option value="plan" {{if eq .Provider.ClaudeDefaultMode "plan"}}selected{{end}}>plan</option>
+      </select>
+    </label>
+
+    <div class="checkbox-grid">
+      <label class="checkbox-card">
+        <input type="checkbox" name="claude_use_sandbox" {{if .Provider.ClaudeUseSandbox}}checked{{end}}>
+        <span>写入 <code>IS_SANDBOX=1</code></span>
+      </label>
+      <label class="checkbox-card">
+        <input type="checkbox" name="claude_skip_dangerous_prompt" {{if .Provider.ClaudeSkipDangerousPrompt}}checked{{end}}>
+        <span>写入 <code>skipDangerousModePermissionPrompt=true</code></span>
+      </label>
+    </div>
+    {{end}}
+
+    <div class="actions form-actions">
+      <button class="button" type="submit">保存配置</button>
+      <a class="button secondary" href="/providers">返回列表</a>
+    </div>
+  </form>
+</section>
+{{end}}
