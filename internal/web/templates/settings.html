@@ -11,7 +11,7 @@
   <div class="settings-version-head">
     <div>
       <h2>版本与更新</h2>
-      <p class="subtle">本地版本来自当前 git 仓库；上游版本检查目标为当前仓库的 <code>origin/main</code>。一键更新会重新执行 <code>install.sh</code>，并以远端最新代码覆盖本地工作区。</p>
+      <p class="subtle">版本号采用语义化版本格式 <code>v&lt;major&gt;.&lt;minor&gt;.&lt;patch&gt;</code>。在线检查会读取当前仓库 <code>origin/main</code> 分支中的 <code>VERSION</code> 文件；一键更新会重新执行 <code>install.sh</code> 并重启服务。</p>
     </div>
     <div class="settings-version-actions">
       <form method="post" action="/settings/version/check">
@@ -27,9 +27,9 @@
     <div class="version-card">
       <span class="version-label">当前版本</span>
       {{if .Version.Ready}}
-      <strong>{{if .Version.LocalShort}}{{.Version.LocalShort}}{{else}}未知{{end}}</strong>
+      <strong>{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</strong>
       <p class="subtle">分支：{{if .Version.LocalBranch}}{{.Version.LocalBranch}}{{else}}未知{{end}}</p>
-      <p class="subtle">提交时间：{{if .Version.LocalCommittedAt}}{{.Version.LocalCommittedAt}}{{else}}未知{{end}}</p>
+      <p class="subtle">版本文件：<code>{{.Version.VersionFilePath}}</code></p>
       {{if .Version.LocalDirty}}
       <span class="pill status-error">本地有未提交修改</span>
       {{else}}
@@ -48,8 +48,8 @@
         <strong>检查失败</strong>
         <p class="subtle">{{.Version.RemoteError}}</p>
         {{else}}
-        <strong>{{if .Version.RemoteShort}}{{.Version.RemoteShort}}{{else}}未知{{end}}</strong>
-        <p class="subtle">来源：<code>origin/main</code></p>
+        <strong>{{if .Version.RemoteVersion}}{{.Version.RemoteVersion}}{{else}}未知{{end}}</strong>
+        <p class="subtle">来源：<code>origin/main:VERSION</code></p>
         {{if .Version.UpdateAvailable}}
         <span class="pill status-neutral">发现新版本</span>
         {{else}}
@@ -58,7 +58,7 @@
         {{end}}
       {{else}}
       <strong>未检查</strong>
-      <p class="subtle">点击“检查更新”后显示远端最新提交。</p>
+      <p class="subtle">点击“检查更新”后显示远端版本号。</p>
       <span class="pill status-neutral">等待检测</span>
       {{end}}
     </div>

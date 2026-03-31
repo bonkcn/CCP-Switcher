@@ -382,8 +382,8 @@ func readCodexProvider(configPath string, authPath string) (*store.Provider, err
 		Secret:              secret,
 		Model:               stringValue(configData["model"]),
 		ReasoningEffort:     stringValue(configData["model_reasoning_effort"]),
-		CodexApprovalPolicy: defaultString(stringValue(configData["approval_policy"]), "on-request"),
-		CodexSandboxMode:    defaultString(stringValue(configData["sandbox_mode"]), "workspace-write"),
+		CodexApprovalPolicy: stringValue(configData["approval_policy"]),
+		CodexSandboxMode:    stringValue(configData["sandbox_mode"]),
 	}, nil
 }
 
@@ -575,7 +575,7 @@ func (m *Manager) inspectCodexManagedStatus() ManagedConfigStatus {
 			Kind:       "codex",
 			Compatible: true,
 			Mode:       "定点替换",
-			Details:    "当前 Codex 配置已兼容。切换时优先只替换 OPENAI_API_KEY、custom.base_url，以及已有的 model / reasoning / approval_policy / sandbox_mode 字段。",
+			Details:    "当前 Codex 配置已兼容。切换时优先只替换 OPENAI_API_KEY 与 custom.base_url；模型、推理强度、审批策略、沙箱模式仅在数据库中已设置时才写入。",
 		}
 	}
 	return ManagedConfigStatus{

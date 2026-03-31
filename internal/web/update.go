@@ -7,61 +7,71 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bonkcn/ccp-switcher/internal/app"
 )
 
+var semverPattern = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)$`)
+
 type versionStatusView struct {
 	RepoDir           string
 	OriginURL         string
 	InstallScriptPath string
+	VersionFilePath   string
 	CanUpdate         bool
 	Ready             bool
 	RepoError         string
 	LocalBranch       string
-	LocalCommit       string
-	LocalShort        string
-	LocalCommittedAt  string
+	LocalVersion      string
 	LocalDirty        bool
 	RemoteChecked     bool
-	RemoteCommit      string
-	RemoteShort       string
+	RemoteVersion     string
 	RemoteError       string
 	UpdateAvailable   bool
 }
 
+type semanticVersion struct {
+	Major int
+	Minor int
+	Patch int
+	Raw   string
+}
+
 func inspectVersionStatus(repoDir string, checkRemote bool) *versionStatusView {
+	trimmedRepoDir := strings.TrimSpace(repoDir)
 	status := &versionStatusView{
-		RepoDir:           strings.TrimSpace(repoDir),
-		InstallScriptPath: filepath.Join(strings.TrimSpace(repoDir), "install.sh"),
+		RepoDir:           trimmedRepoDir,
+		InstallScriptPath: filepath.Join(trimmedRepoDir, "install.sh"),
+		VersionFilePath:   filepath.Join(trimmedRepoDir, "VERSION"),
 	}
-	if status.RepoDir == "" {
+	if trimmedRepoDir == "" {
 		status.RepoError = "未识别当前代码目录，无法执行版本检测。"
 		return status
 	}
-	if _, err := os.Stat(filepath.Join(status.RepoDir, ".git")); err != nil {
-		status.RepoError = "当前工作目录不是 git 仓库，无法执行版本检测。"
+
+	status.CanUpdate = fileExists(status.InstallScriptPath)
+	status.LocalVersion = readVersionValue(status.VersionFilePath)
+	if status.LocalVersion == "" {
+		status.RepoError = "未找到有效的 VERSION 文件。"
+		return status
+	}
+	if _, err := parseSemanticVersion(status.LocalVersion); err != nil {
+		status.RepoError = "本地 VERSION 文件格式无效: " + err.Error()
+		return status
+	}
+
+	if _, err := os.Stat(filepath.Join(trimmedRepoDir, ".git")); err != nil {
+		status.RepoError = "当前代码目录不是 git 仓库，无法执行在线更新。"
 		return status
 	}
 
 	status.Ready = true
-	status.CanUpdate = fileExists(status.InstallScriptPath)
 	if output, err := gitOutput(status.RepoDir, 3*time.Second, "branch", "--show-current"); err == nil {
 		status.LocalBranch = output
-	}
-	commit, err := gitOutput(status.RepoDir, 3*time.Second, "rev-parse", "HEAD")
-	if err != nil {
-		status.Ready = false
-		status.RepoError = "读取当前版本失败: " + err.Error()
-		return status
-	}
-	status.LocalCommit = commit
-	status.LocalShort = shortCommit(commit)
-
-	if output, err := gitOutput(status.RepoDir, 3*time.Second, "log", "-1", "--format=%cI"); err == nil {
-		status.LocalCommittedAt = formatGitTime(output)
 	}
 	if output, err := gitOutput(status.RepoDir, 3*time.Second, "status", "--porcelain"); err == nil {
 		status.LocalDirty = strings.TrimSpace(output) != ""
@@ -75,20 +85,19 @@ func inspectVersionStatus(repoDir string, checkRemote bool) *versionStatusView {
 	}
 
 	status.RemoteChecked = true
-	output, err := gitOutput(status.RepoDir, 8*time.Second, "ls-remote", "--heads", "origin", "main")
+	remoteVersion, err := fetchRemoteVersion(status.RepoDir)
 	if err != nil {
-		status.RemoteError = "检查 origin/main 失败: " + err.Error()
+		status.RemoteError = err.Error()
 		return status
 	}
+	status.RemoteVersion = remoteVersion
 
-	fields := strings.Fields(output)
-	if len(fields) == 0 {
-		status.RemoteError = "origin/main 未返回可解析的提交信息。"
+	cmp, err := compareSemanticVersion(remoteVersion, status.LocalVersion)
+	if err != nil {
+		status.RemoteError = "比较版本失败: " + err.Error()
 		return status
 	}
-	status.RemoteCommit = fields[0]
-	status.RemoteShort = shortCommit(fields[0])
-	status.UpdateAvailable = status.LocalCommit != "" && status.RemoteCommit != "" && status.LocalCommit != status.RemoteCommit
+	status.UpdateAvailable = cmp > 0
 	return status
 }
 
@@ -135,6 +144,79 @@ func triggerSelfUpdate(cfg app.Config, status *versionStatusView) (string, error
 	return unitName, nil
 }
 
+func fetchRemoteVersion(repoDir string) (string, error) {
+	if _, err := gitOutput(repoDir, 12*time.Second, "fetch", "--depth=1", "origin", "main"); err != nil {
+		return "", fmt.Errorf("检查远端版本失败: %w", err)
+	}
+	output, err := gitOutput(repoDir, 5*time.Second, "show", "FETCH_HEAD:VERSION")
+	if err != nil {
+		return "", fmt.Errorf("读取远端 VERSION 失败: %w", err)
+	}
+	version := strings.TrimSpace(output)
+	if version == "" {
+		return "", errors.New("远端 VERSION 文件为空")
+	}
+	if _, err := parseSemanticVersion(version); err != nil {
+		return "", fmt.Errorf("远端 VERSION 文件格式无效: %w", err)
+	}
+	return version, nil
+}
+
+func readVersionValue(path string) string {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(content))
+}
+
+func parseSemanticVersion(value string) (semanticVersion, error) {
+	matches := semverPattern.FindStringSubmatch(strings.TrimSpace(value))
+	if len(matches) != 4 {
+		return semanticVersion{}, errors.New("必须采用 v<major>.<minor>.<patch> 格式")
+	}
+	major, _ := strconv.Atoi(matches[1])
+	minor, _ := strconv.Atoi(matches[2])
+	patch, _ := strconv.Atoi(matches[3])
+	return semanticVersion{
+		Major: major,
+		Minor: minor,
+		Patch: patch,
+		Raw:   matches[0],
+	}, nil
+}
+
+func compareSemanticVersion(left string, right string) (int, error) {
+	leftVersion, err := parseSemanticVersion(left)
+	if err != nil {
+		return 0, err
+	}
+	rightVersion, err := parseSemanticVersion(right)
+	if err != nil {
+		return 0, err
+	}
+
+	switch {
+	case leftVersion.Major != rightVersion.Major:
+		return compareInt(leftVersion.Major, rightVersion.Major), nil
+	case leftVersion.Minor != rightVersion.Minor:
+		return compareInt(leftVersion.Minor, rightVersion.Minor), nil
+	default:
+		return compareInt(leftVersion.Patch, rightVersion.Patch), nil
+	}
+}
+
+func compareInt(left int, right int) int {
+	switch {
+	case left > right:
+		return 1
+	case left < right:
+		return -1
+	default:
+		return 0
+	}
+}
+
 func gitOutput(repoDir string, timeout time.Duration, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -161,20 +243,4 @@ func fileExists(path string) bool {
 		return false
 	}
 	return !info.IsDir()
-}
-
-func shortCommit(value string) string {
-	value = strings.TrimSpace(value)
-	if len(value) <= 12 {
-		return value
-	}
-	return value[:12]
-}
-
-func formatGitTime(value string) string {
-	timestamp, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
-	if err != nil {
-		return strings.TrimSpace(value)
-	}
-	return timestamp.Local().Format("2006-01-02 15:04:05 MST")
 }

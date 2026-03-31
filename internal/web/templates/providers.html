@@ -85,10 +85,10 @@
         </div>
         <div class="row-meta">
           <span class="meta-pill">模型: {{if .Model}}{{.Model}}{{else}}未指定{{end}}</span>
-          {{if .ReasoningEffort}}<span class="meta-pill">推理: {{.ReasoningEffort}}</span>{{end}}
-          <span class="meta-pill">审批: {{.CodexApprovalPolicy}}</span>
-          <span class="meta-pill">沙箱: {{.CodexSandboxMode}}</span>
-          {{if and (eq .CodexApprovalPolicy "never") (eq .CodexSandboxMode "danger-full-access")}}<span class="meta-pill">YOLO 等价</span>{{end}}
+          <span class="meta-pill">推理: {{optionalLabel .ReasoningEffort "保持当前"}}</span>
+          <span class="meta-pill">审批: {{optionalLabel .CodexApprovalPolicy "保持当前"}}</span>
+          <span class="meta-pill">沙箱: {{optionalLabel .CodexSandboxMode "保持当前"}}</span>
+          {{if and (eq .CodexApprovalPolicy "never") (eq .CodexSandboxMode "danger-full-access")}}<span class="meta-pill">完全放开执行</span>{{end}}
         </div>
         <div class="row-result">
           <span class="row-result-label">最近测试</span>

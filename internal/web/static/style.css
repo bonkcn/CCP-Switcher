@@ -313,6 +313,8 @@ details[open] > summary::before { transform: rotate(90deg); }
 .form-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .form-note-block { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--bg-accent); }
 .form-note-block .subtle { margin: 0; }
+.mode-guide { display: grid; gap: 8px; }
+.mode-guide strong { color: var(--text); }
 .checkbox-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .checkbox-card { flex-direction: row; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--bg-accent); font-weight: 400; }
 .checkbox-card span { color: var(--text-secondary); }

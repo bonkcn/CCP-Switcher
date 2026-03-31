@@ -78,6 +78,7 @@ func NewServer(cfg app.Config, st *store.Store, manager *runtimecfg.Manager, log
 		"formatTime":    formatTime,
 		"isActive":      isActive,
 		"kindLabel":     kindLabel,
+		"optionalLabel": optionalLabel,
 		"statusClass":   statusClass,
 		"firstLine":     firstLine,
 		"hasMoreText":   hasMoreText,
@@ -258,10 +259,8 @@ func (s *Server) handleProviderNew(w http.ResponseWriter, r *http.Request) {
 		CurrentPath:     "/providers",
 		ContentTemplate: "provider_form.html",
 		Provider: store.Provider{
-			Kind:                kind,
-			ClaudeDefaultMode:   "default",
-			CodexApprovalPolicy: "on-request",
-			CodexSandboxMode:    "workspace-write",
+			Kind:              kind,
+			ClaudeDefaultMode: "default",
 		},
 	})
 }
@@ -540,7 +539,7 @@ func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 	s.renderSettingsPage(
 		w,
 		http.StatusOK,
-		"更新任务已提交: "+unitName+"。服务将在重新编译后自动重启，页面可能短暂断开，请稍后刷新并再次检查版本。",
+		"更新任务已启动: "+unitName+"。服务将在重新编译后自动重启，页面可能短暂断开，请稍后刷新并再次检查版本。",
 		"",
 		"",
 		true,
@@ -713,11 +712,15 @@ func providerFromRequest(r *http.Request, existing store.Provider) (store.Provid
 		return provider, fmt.Errorf("provider kind must be claude or codex")
 	}
 	if provider.Kind == "codex" {
-		provider.CodexApprovalPolicy = firstNonEmpty(provider.CodexApprovalPolicy, "on-request")
-		provider.CodexSandboxMode = firstNonEmpty(provider.CodexSandboxMode, "workspace-write")
+		if !isAllowedValue(provider.CodexApprovalPolicy, "", "untrusted", "on-failure", "on-request", "never") {
+			return provider, fmt.Errorf("invalid approval policy")
+		}
+		if !isAllowedValue(provider.CodexSandboxMode, "", "read-only", "workspace-write", "danger-full-access") {
+			return provider, fmt.Errorf("invalid sandbox mode")
+		}
 	} else {
-		provider.CodexApprovalPolicy = "on-request"
-		provider.CodexSandboxMode = "workspace-write"
+		provider.CodexApprovalPolicy = ""
+		provider.CodexSandboxMode = ""
 	}
 	if provider.Name == "" {
 		return provider, fmt.Errorf("provider name is required")
@@ -827,6 +830,22 @@ func providerCount(list []store.Provider) string {
 	default:
 		return fmt.Sprintf("%d 个", len(list))
 	}
+}
+
+func optionalLabel(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
+}
+
+func isAllowedValue(value string, allowed ...string) bool {
+	for _, item := range allowed {
+		if strings.TrimSpace(value) == item {
+			return true
+		}
+	}
+	return false
 }
 
 func splitProvidersByKind(providers []store.Provider) ([]store.Provider, []store.Provider) {

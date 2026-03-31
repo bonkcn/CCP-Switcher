@@ -47,10 +47,11 @@
       <label>
         <span class="field-label">Approval Policy</span>
         <select name="codex_approval_policy">
-          <option value="on-request" {{if or (eq .Provider.CodexApprovalPolicy "on-request") (eq .Provider.CodexApprovalPolicy "")}}selected{{end}}>on-request</option>
-          <option value="never" {{if eq .Provider.CodexApprovalPolicy "never"}}selected{{end}}>never</option>
+          <option value="" {{if eq .Provider.CodexApprovalPolicy ""}}selected{{end}}>保持当前 / 不写入</option>
           <option value="untrusted" {{if eq .Provider.CodexApprovalPolicy "untrusted"}}selected{{end}}>untrusted</option>
           <option value="on-failure" {{if eq .Provider.CodexApprovalPolicy "on-failure"}}selected{{end}}>on-failure</option>
+          <option value="on-request" {{if eq .Provider.CodexApprovalPolicy "on-request"}}selected{{end}}>on-request</option>
+          <option value="never" {{if eq .Provider.CodexApprovalPolicy "never"}}selected{{end}}>never</option>
         </select>
       </label>
     </div>
@@ -59,15 +60,21 @@
       <label>
         <span class="field-label">Sandbox Mode</span>
         <select name="codex_sandbox_mode">
-          <option value="workspace-write" {{if or (eq .Provider.CodexSandboxMode "workspace-write") (eq .Provider.CodexSandboxMode "")}}selected{{end}}>workspace-write</option>
+          <option value="" {{if eq .Provider.CodexSandboxMode ""}}selected{{end}}>保持当前 / 不写入</option>
           <option value="read-only" {{if eq .Provider.CodexSandboxMode "read-only"}}selected{{end}}>read-only</option>
+          <option value="workspace-write" {{if eq .Provider.CodexSandboxMode "workspace-write"}}selected{{end}}>workspace-write</option>
           <option value="danger-full-access" {{if eq .Provider.CodexSandboxMode "danger-full-access"}}selected{{end}}>danger-full-access</option>
         </select>
       </label>
 
       <div class="form-note-block">
         <span class="field-label">执行模式说明</span>
-        <p class="subtle">`YOLO` 等价配置: <code>approval_policy="never"</code> + <code>sandbox_mode="danger-full-access"</code>。</p>
+        <div class="mode-guide">
+          <p class="subtle"><strong>保持当前 / 不写入</strong>：切换时不覆盖该字段。若目标配置文件已有值，则保留原值；若首次生成配置文件，则不主动写入该字段。</p>
+          <p class="subtle"><strong>Approval Policy</strong>：<code>untrusted</code> 仅对可信命令免审批；<code>on-failure</code> 先执行，失败后才请求放宽执行环境，当前 CLI 已将其标记为弃用；<code>on-request</code> 由模型决定是否申请审批；<code>never</code> 不申请审批，执行失败直接返回给模型。</p>
+          <p class="subtle"><strong>Sandbox Mode</strong>：<code>read-only</code> 只读执行；<code>workspace-write</code> 允许写入当前工作区及显式授权目录；<code>danger-full-access</code> 不启用沙箱限制。</p>
+          <p class="subtle"><strong>完全放开执行</strong>：常被称为 “YOLO” 组合，对应 <code>approval_policy="never"</code> 与 <code>sandbox_mode="danger-full-access"</code>。</p>
+        </div>
       </div>
     </div>
     {{end}}

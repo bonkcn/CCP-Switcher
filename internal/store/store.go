@@ -232,8 +232,8 @@ INSERT INTO providers (
 			ciphertext,
 			strings.TrimSpace(provider.Model),
 			strings.TrimSpace(provider.ReasoningEffort),
-			strings.TrimSpace(defaultString(provider.CodexApprovalPolicy, "on-request")),
-			strings.TrimSpace(defaultString(provider.CodexSandboxMode, "workspace-write")),
+			strings.TrimSpace(provider.CodexApprovalPolicy),
+			strings.TrimSpace(provider.CodexSandboxMode),
 			strings.TrimSpace(defaultString(provider.ClaudeDefaultMode, "default")),
 			boolToInt(provider.ClaudeUseSandbox),
 			boolToInt(provider.ClaudeSkipDangerousPrompt),
@@ -260,8 +260,8 @@ WHERE id = ?`,
 		ciphertext,
 		strings.TrimSpace(provider.Model),
 		strings.TrimSpace(provider.ReasoningEffort),
-		strings.TrimSpace(defaultString(provider.CodexApprovalPolicy, "on-request")),
-		strings.TrimSpace(defaultString(provider.CodexSandboxMode, "workspace-write")),
+		strings.TrimSpace(provider.CodexApprovalPolicy),
+		strings.TrimSpace(provider.CodexSandboxMode),
 		strings.TrimSpace(defaultString(provider.ClaudeDefaultMode, "default")),
 		boolToInt(provider.ClaudeUseSandbox),
 		boolToInt(provider.ClaudeSkipDangerousPrompt),
@@ -586,8 +586,6 @@ func (s *Store) scanProvider(sc scanner) (Provider, error) {
 	}
 
 	provider.Secret = secret
-	provider.CodexApprovalPolicy = defaultString(provider.CodexApprovalPolicy, "on-request")
-	provider.CodexSandboxMode = defaultString(provider.CodexSandboxMode, "workspace-write")
 	provider.ClaudeUseSandbox = useSandbox == 1
 	provider.ClaudeSkipDangerousPrompt = skipDangerousPrompt == 1
 	provider.LastTestAt = parseTime(lastTestAt)
