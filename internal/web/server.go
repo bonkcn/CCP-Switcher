@@ -523,7 +523,7 @@ func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 	version := inspectVersionStatus(s.repoDir, false)
 	unitName, err := triggerSelfUpdate(s.cfg, version)
 	if err != nil {
-		s.renderSettingsPage(w, http.StatusInternalServerError, "", "启动更新失败: "+err.Error(), "", true)
+		s.renderSettingsPage(w, http.StatusInternalServerError, "", "启动更新失败: "+err.Error(), "", false)
 		return
 	}
 	s.renderSettingsPage(
@@ -532,7 +532,7 @@ func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 		"更新任务已启动: "+unitName+"。服务将在重新编译后自动重启，页面可能短暂断开，请稍后刷新并再次检查版本。",
 		"",
 		"",
-		true,
+		false,
 	)
 }
 

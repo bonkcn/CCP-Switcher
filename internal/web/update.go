@@ -124,6 +124,35 @@ func triggerSelfUpdate(cfg app.Config, status *versionStatusView) (string, error
 	if status.OriginURL != "" {
 		args = append(args, "--setenv=REPO_URL="+status.OriginURL)
 	}
+	if pathValue := strings.TrimSpace(os.Getenv("PATH")); pathValue != "" {
+		args = append(args, "--setenv=PATH="+pathValue)
+	}
+	homeDir := strings.TrimSpace(os.Getenv("HOME"))
+	if homeDir == "" {
+		if resolvedHome, err := os.UserHomeDir(); err == nil {
+			homeDir = strings.TrimSpace(resolvedHome)
+		}
+	}
+	if homeDir != "" {
+		args = append(args, "--setenv=HOME="+homeDir)
+		gopath := strings.TrimSpace(os.Getenv("GOPATH"))
+		if gopath == "" {
+			gopath = filepath.Join(homeDir, "go")
+		}
+		args = append(args, "--setenv=GOPATH="+gopath)
+
+		gomodcache := strings.TrimSpace(os.Getenv("GOMODCACHE"))
+		if gomodcache == "" {
+			gomodcache = filepath.Join(gopath, "pkg", "mod")
+		}
+		args = append(args, "--setenv=GOMODCACHE="+gomodcache)
+
+		gocache := strings.TrimSpace(os.Getenv("GOCACHE"))
+		if gocache == "" {
+			gocache = filepath.Join(homeDir, ".cache", "go-build")
+		}
+		args = append(args, "--setenv=GOCACHE="+gocache)
+	}
 	args = append(args, status.InstallScriptPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
