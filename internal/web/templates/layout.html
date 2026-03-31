@@ -129,14 +129,22 @@
 
       try {
         const formData = new FormData(form, submitBtn || undefined);
-        const urlParams = new URLSearchParams(formData).toString();
-        
-        const response = await fetch(action, {
+        const formEnctype = ((submitBtn && submitBtn.getAttribute('formenctype')) || form.enctype || form.getAttribute('enctype') || '').toLowerCase();
+        const hasFileField = Array.from(formData.values()).some((value) => value instanceof File && value.name);
+        const isMultipart = formEnctype.includes('multipart/form-data') || hasFileField;
+        const fetchOptions = {
           method: (method || 'POST').toUpperCase(),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: urlParams,
           redirect: 'follow'
-        });
+        };
+
+        if (isMultipart) {
+          fetchOptions.body = formData;
+        } else {
+          fetchOptions.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+          fetchOptions.body = new URLSearchParams(formData).toString();
+        }
+        
+        const response = await fetch(action, fetchOptions);
         
         const html = await response.text();
         const parser = new DOMParser();
