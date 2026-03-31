@@ -135,6 +135,21 @@ CCP Switcher 使用语义化版本号，格式如下：
 - 在线版本：读取 `origin/main` 分支中的 `VERSION`
 - 一键更新：重新执行当前仓库中的 `install.sh`，完成代码更新、二进制重建与服务重启
 
+## 持续集成与发行
+
+仓库已配置 GitHub Actions：
+
+- `CI`：在 `push` 到 `main` 及 `pull_request` 时执行格式校验、测试与构建
+- `Release`：在推送 `v*` 版本标签时发布 GitHub Release
+
+Release 工作流会生成以下发行文件：
+
+- `ccp-switcher_<version>_linux_amd64.tar.gz`
+- `ccp-switcher_<version>_linux_arm64.tar.gz`
+- `SHA256SUMS.txt`
+
+Release 工作流同时支持在 GitHub Actions 页面手动指定现有版本标签重新发布。
+
 ## 一键安装
 
 默认面向 Debian / Ubuntu，要求以 `root` 身份执行：
