@@ -6,7 +6,7 @@
         版本控制
         {{if .Version.UpdateAvailable}}<span class="pill status-neutral">新版本 {{.Version.RemoteVersion}}</span>{{end}}
       </h2>
-      <div class="subtle" style="font-family:ui-monospace,Menlo,monospace;">v{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</div>
+      <div class="subtle" style="font-family:ui-monospace,Menlo,monospace;">{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知版本{{end}}</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <form method="post" action="/settings/version/check" style="margin:0;"><button class="button secondary" type="submit">查验进度</button></form>
