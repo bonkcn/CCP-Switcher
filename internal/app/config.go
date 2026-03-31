@@ -17,7 +17,6 @@ type Config struct {
 	ClaudeCommand            string
 	CodexCommand             string
 	DefaultWorkdir           string
-	TmuxSessionPrefix        string
 }
 
 func LoadConfig() Config {
@@ -35,7 +34,6 @@ func LoadConfig() Config {
 		ClaudeCommand:            getenv("CCP_SWITCHER_CLAUDE_CMD", "claude"),
 		CodexCommand:             getenv("CCP_SWITCHER_CODEX_CMD", "codex"),
 		DefaultWorkdir:           getenv("CCP_SWITCHER_WORKDIR", "/root"),
-		TmuxSessionPrefix:        getenv("CCP_SWITCHER_TMUX_PREFIX", "ccp-switcher"),
 	}
 }
 

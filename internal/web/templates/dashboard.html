@@ -17,12 +17,11 @@
 </div>
 
 <section class="grid two">
-  <!-- Claude CLI Status -->
   <article class="panel" style="position:relative;margin-bottom:0;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
       <div>
         <h3 style="font-size:14px;display:flex;align-items:center;gap:6px;">
-          Claude CLI
+          Claude 接管状态
           <div class="tooltip-wrap bottom-left">
             <span class="tooltip-icon">?</span>
             <div class="tooltip-content">
@@ -31,14 +30,10 @@
             </div>
           </div>
         </h3>
-        {{if .ClaudeStatus.BinaryFound}}
-          <div class="subtle"><code>{{.ClaudeStatus.BinaryPath}}</code></div>
-        {{else}}
-          <div class="subtle" style="color:var(--warn-text);">未检测到命令</div>
-        {{end}}
+        <div class="subtle"><code>{{.ClaudePath}}</code></div>
       </div>
       <div>
-        {{if .ClaudeStatus.Running}}<span class="pill status-ok">运行中</span>{{else}}<span class="pill status-neutral">已停止</span>{{end}}
+        {{if .ActiveClaude}}<span class="pill status-ok">已接管</span>{{else}}<span class="pill status-neutral">未配置</span>{{end}}
       </div>
     </div>
     
@@ -54,21 +49,15 @@
     </div>
 
     <div style="display:flex;gap:8px;justify-content:flex-end;">
-      {{if .ClaudeStatus.Running}}
-      <form method="post" action="/runtime/claude/stop"><button class="button danger small" type="submit">停止执行</button></form>
-      {{else}}
-      <form method="post" action="/runtime/claude/launch"><button class="button small" type="submit">启动服务</button></form>
-      {{end}}
       <a class="button secondary small" href="/providers">更换网关</a>
     </div>
   </article>
 
-  <!-- Codex CLI Status -->
   <article class="panel" style="position:relative;margin-bottom:0;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
       <div>
         <h3 style="font-size:14px;display:flex;align-items:center;gap:6px;">
-          Codex CLI
+          Codex 接管状态
           <div class="tooltip-wrap bottom-left">
             <span class="tooltip-icon">?</span>
             <div class="tooltip-content">
@@ -77,14 +66,10 @@
             </div>
           </div>
         </h3>
-        {{if .CodexStatus.BinaryFound}}
-          <div class="subtle"><code>{{.CodexStatus.BinaryPath}}</code></div>
-        {{else}}
-          <div class="subtle" style="color:var(--warn-text);">未检测到命令</div>
-        {{end}}
+        <div class="subtle"><code>{{.CodexConfigPath}}</code></div>
       </div>
       <div>
-        {{if .CodexStatus.Running}}<span class="pill status-ok">运行中</span>{{else}}<span class="pill status-neutral">已停止</span>{{end}}
+        {{if .ActiveCodex}}<span class="pill status-ok">已接管</span>{{else}}<span class="pill status-neutral">未配置</span>{{end}}
       </div>
     </div>
 
@@ -100,11 +85,6 @@
     </div>
 
     <div style="display:flex;gap:8px;justify-content:flex-end;">
-      {{if .CodexStatus.Running}}
-      <form method="post" action="/runtime/codex/stop"><button class="button danger small" type="submit">停止执行</button></form>
-      {{else}}
-      <form method="post" action="/runtime/codex/launch"><button class="button small" type="submit">启动服务</button></form>
-      {{end}}
       <a class="button secondary small" href="/providers">更换网关</a>
     </div>
   </article>

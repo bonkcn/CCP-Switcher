@@ -123,7 +123,14 @@ WantedBy=multi-user.target
 EOF
 
   systemctl daemon-reload
-  systemctl enable --now ccp-switcher
+  systemctl enable ccp-switcher >/dev/null 2>&1 || true
+  if systemctl is-active --quiet ccp-switcher; then
+    log "重启现有服务以加载新二进制..."
+    systemctl restart ccp-switcher
+  else
+    log "启动服务..."
+    systemctl start ccp-switcher
+  fi
 }
 
 print_summary() {

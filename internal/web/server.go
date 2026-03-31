@@ -48,8 +48,6 @@ type viewData struct {
 	ActiveIDs       map[string]int64
 	ActiveClaude    *store.Provider
 	ActiveCodex     *store.Provider
-	ClaudeStatus    runtimecfg.RuntimeSessionStatus
-	CodexStatus     runtimecfg.RuntimeSessionStatus
 	ClaudeManaged   runtimecfg.ManagedConfigStatus
 	CodexManaged    runtimecfg.ManagedConfigStatus
 	Logs            []store.SwitchLog
@@ -126,8 +124,6 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /providers/{id}/probe/api", s.authenticated(s.handleProbeAPITest))
 	mux.HandleFunc("POST /providers/{id}/probe/cli", s.authenticated(s.handleProbeCLITest))
 	mux.HandleFunc("POST /providers/{id}/switch", s.authenticated(s.handleSwitchProvider))
-	mux.HandleFunc("POST /runtime/{kind}/launch", s.authenticated(s.handleRuntimeLaunch))
-	mux.HandleFunc("POST /runtime/{kind}/stop", s.authenticated(s.handleRuntimeStop))
 	mux.HandleFunc("GET /settings", s.authenticated(s.handleSettings))
 	mux.HandleFunc("POST /settings/password", s.authenticated(s.handlePasswordUpdate))
 	mux.HandleFunc("POST /settings/token", s.authenticated(s.handleTokenRotate))
@@ -229,8 +225,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		ActiveIDs:       activeIDs,
 		ActiveClaude:    activeClaude,
 		ActiveCodex:     activeCodex,
-		ClaudeStatus:    s.runtime.SessionStatus("claude"),
-		CodexStatus:     s.runtime.SessionStatus("codex"),
 		ClaudeManaged:   s.runtime.ManagedStatus("claude"),
 		CodexManaged:    s.runtime.ManagedStatus("codex"),
 		ListenAddr:      s.cfg.ListenAddr,
@@ -488,26 +482,6 @@ func (s *Server) handleSwitchProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.redirectWithMessage(w, r, "/providers", provider.Name+" 切换成功，旧配置已备份至: "+backupDir, "")
-}
-
-func (s *Server) handleRuntimeLaunch(w http.ResponseWriter, r *http.Request) {
-	kind := strings.TrimSpace(r.PathValue("kind"))
-	status, err := s.runtime.Launch(kind)
-	if err != nil {
-		s.redirectWithMessage(w, r, "/", "", err.Error())
-		return
-	}
-	message := fmt.Sprintf("%s 会话已就绪: %s", kindLabel(kind), status.Session)
-	s.redirectWithMessage(w, r, "/", message, "")
-}
-
-func (s *Server) handleRuntimeStop(w http.ResponseWriter, r *http.Request) {
-	kind := strings.TrimSpace(r.PathValue("kind"))
-	if err := s.runtime.Stop(kind); err != nil {
-		s.redirectWithMessage(w, r, "/", "", err.Error())
-		return
-	}
-	s.redirectWithMessage(w, r, "/", kindLabel(kind)+" 会话已停止", "")
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {

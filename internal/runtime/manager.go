@@ -41,14 +41,6 @@ type ModelCatalogResult struct {
 	Models  []string
 }
 
-type RuntimeSessionStatus struct {
-	Kind        string
-	Session     string
-	BinaryPath  string
-	BinaryFound bool
-	Running     bool
-}
-
 type ManagedConfigStatus struct {
 	Kind       string
 	Compatible bool
@@ -200,24 +192,6 @@ func (m *Manager) TestModelCLIForProvider(provider store.Provider, model string)
 	}
 }
 
-func (m *Manager) SessionStatus(kind string) RuntimeSessionStatus {
-	status := RuntimeSessionStatus{
-		Kind:    kind,
-		Session: m.sessionName(kind),
-	}
-
-	command := m.commandForKind(kind)
-	if binaryPath, err := exec.LookPath(command); err == nil {
-		status.BinaryPath = binaryPath
-		status.BinaryFound = true
-	}
-
-	if err := exec.Command("tmux", "has-session", "-t", status.Session).Run(); err == nil {
-		status.Running = true
-	}
-	return status
-}
-
 func (m *Manager) ManagedStatus(kind string) ManagedConfigStatus {
 	switch kind {
 	case "claude":
@@ -231,35 +205,6 @@ func (m *Manager) ManagedStatus(kind string) ManagedConfigStatus {
 			Details: "unsupported provider kind",
 		}
 	}
-}
-
-func (m *Manager) Launch(kind string) (RuntimeSessionStatus, error) {
-	status := m.SessionStatus(kind)
-	if !status.BinaryFound {
-		return status, fmt.Errorf("%s command not found", kind)
-	}
-	if status.Running {
-		return status, nil
-	}
-
-	script := fmt.Sprintf("cd %q && exec %q", m.cfg.DefaultWorkdir, status.BinaryPath)
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", status.Session, "bash", "-lc", script)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return status, fmt.Errorf("launch %s: %v: %s", kind, err, strings.TrimSpace(string(output)))
-	}
-
-	return m.SessionStatus(kind), nil
-}
-
-func (m *Manager) Stop(kind string) error {
-	session := m.sessionName(kind)
-	if err := exec.Command("tmux", "has-session", "-t", session).Run(); err != nil {
-		return nil
-	}
-	if err := exec.Command("tmux", "kill-session", "-t", session).Run(); err != nil {
-		return fmt.Errorf("stop %s session: %w", kind, err)
-	}
-	return nil
 }
 
 func (m *Manager) importClaudeConfig() error {
@@ -1650,19 +1595,4 @@ func cleanedNonEmptyLines(value string) []string {
 		lines = append(lines, trimmed)
 	}
 	return lines
-}
-
-func (m *Manager) commandForKind(kind string) string {
-	switch kind {
-	case "claude":
-		return m.cfg.ClaudeCommand
-	case "codex":
-		return m.cfg.CodexCommand
-	default:
-		return kind
-	}
-}
-
-func (m *Manager) sessionName(kind string) string {
-	return fmt.Sprintf("%s-%s", m.cfg.TmuxSessionPrefix, kind)
 }
