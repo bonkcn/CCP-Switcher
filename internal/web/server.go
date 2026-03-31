@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -95,7 +96,7 @@ func NewServer(cfg app.Config, st *store.Store, manager *runtimecfg.Manager, log
 		cfg:      cfg,
 		store:    st,
 		runtime:  manager,
-		sessions: NewSessionManager(24 * time.Hour),
+		sessions: NewSessionManager(),
 		logger:   logger,
 		tmpl:     tmpl,
 		repoDir:  repoDir,
@@ -161,7 +162,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionToken, err := s.sessions.Create()
+	fingerprint := loginFingerprint(r)
+	sessionToken, ttl, err := s.sessions.Create(fingerprint)
 	if err != nil {
 		s.renderError(w, http.StatusInternalServerError, "创建会话失败")
 		return
@@ -173,7 +175,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int((24 * time.Hour).Seconds()),
+		MaxAge:   int(ttl.Seconds()),
 	})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -321,7 +323,18 @@ func (s *Server) handleProviderUpdate(w http.ResponseWriter, r *http.Request) {
 		s.redirectWithMessage(w, r, "/providers", "", err.Error())
 		return
 	}
-	s.redirectWithMessage(w, r, "/providers", "供应商配置已更新", "")
+
+	// If this provider is currently active, hot-reload the config files.
+	activeIDs, _ := s.store.ListActiveProviderIDs()
+	notice := "供应商配置已更新"
+	if activeIDs[provider.Kind] == id {
+		if _, _, applyErr := s.runtime.SwitchProvider(id); applyErr != nil {
+			s.redirectWithMessage(w, r, "/providers", "", "配置已保存，但热切换失败："+applyErr.Error())
+			return
+		}
+		notice = "供应商配置已更新并热切换生效"
+	}
+	s.redirectWithMessage(w, r, "/providers", notice, "")
 }
 
 func (s *Server) handleProviderDelete(w http.ResponseWriter, r *http.Request) {
@@ -752,10 +765,20 @@ func maskSecret(secret string) string {
 	if secret == "" {
 		return ""
 	}
-	if len(secret) <= 8 {
-		return "****"
+	// Show prefix up to 10 chars (e.g. "sk-ant-api") so users can confirm which key is active
+	show := 10
+	if len(secret) <= show+4 {
+		return secret[:2] + strings.Repeat("*", len(secret)-2)
 	}
-	return secret[:4] + "..." + secret[len(secret)-4:]
+	return secret[:show] + "..."
+}
+
+func loginFingerprint(r *http.Request) string {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		ip = r.RemoteAddr
+	}
+	return ip + "|" + r.UserAgent()
 }
 
 func formatTime(value time.Time) string {

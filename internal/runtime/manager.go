@@ -587,16 +587,6 @@ func (m *Manager) inspectCodexManagedStatus() ManagedConfigStatus {
 }
 
 func (m *Manager) backupProviderFiles(kind string) (string, error) {
-	backupDir := filepath.Join(
-		m.cfg.DataDir,
-		"backups",
-		kind,
-		time.Now().UTC().Format("20060102-150405"),
-	)
-	if err := os.MkdirAll(backupDir, 0o700); err != nil {
-		return "", fmt.Errorf("create backup dir: %w", err)
-	}
-
 	var paths []string
 	switch kind {
 	case "claude":
@@ -605,6 +595,44 @@ func (m *Manager) backupProviderFiles(kind string) (string, error) {
 		paths = []string{m.cfg.CodexConfigPath, m.cfg.CodexAuthPath}
 	default:
 		return "", errors.New("unsupported provider kind")
+	}
+
+	// Read current file contents for deduplication comparison.
+	currentContents := make(map[string][]byte, len(paths))
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("read file for backup: %w", err)
+		}
+		currentContents[filepath.Base(p)] = data
+	}
+
+	// If the latest existing backup is identical, reuse it.
+	baseDir := filepath.Join(m.cfg.DataDir, "backups", kind)
+	if entries, err := os.ReadDir(baseDir); err == nil && len(entries) > 0 {
+		for i := len(entries) - 1; i >= 0; i-- {
+			if !entries[i].IsDir() {
+				continue
+			}
+			latestDir := filepath.Join(baseDir, entries[i].Name())
+			identical := true
+			for base, content := range currentContents {
+				backed, err := os.ReadFile(filepath.Join(latestDir, base))
+				if err != nil || !bytes.Equal(content, backed) {
+					identical = false
+					break
+				}
+			}
+			if identical {
+				return latestDir, nil
+			}
+			break
+		}
+	}
+
+	backupDir := filepath.Join(baseDir, time.Now().UTC().Format("20060102-150405"))
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
+		return "", fmt.Errorf("create backup dir: %w", err)
 	}
 
 	for _, path := range paths {

@@ -9,6 +9,11 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+{{if eq .CurrentPath "/login"}}
+  <main class="content">
+    {{.Content}}
+  </main>
+{{else}}
   <div class="shell">
     <header class="topbar">
       <div class="brand">
@@ -18,21 +23,17 @@
           <p>Claude Code Provider Switcher</p>
         </div>
       </div>
-      {{if ne .CurrentPath "/login"}}
       <form method="post" action="/logout">
         <button class="button secondary" type="submit">退出</button>
       </form>
-      {{end}}
     </header>
 
-    {{if ne .CurrentPath "/login"}}
     <nav class="nav">
       <a class="{{if eq .CurrentPath "/"}}active{{end}}" href="/">概览</a>
       <a class="{{if eq .CurrentPath "/providers"}}active{{end}}" href="/providers">供应商</a>
       <a class="{{if eq .CurrentPath "/history"}}active{{end}}" href="/history">历史</a>
       <a class="{{if eq .CurrentPath "/settings"}}active{{end}}" href="/settings">设置</a>
     </nav>
-    {{end}}
 
     {{if .Notice}}<div id="server-msg" data-type="success" style="display:none">{{.Notice}}</div>{{end}}
     {{if .Error}}<div id="server-msg" data-type="error" style="display:none">{{.Error}}</div>{{end}}
@@ -41,6 +42,7 @@
       {{.Content}}
     </main>
   </div>
+{{end}}
   
   <div id="toast-container"></div>
   

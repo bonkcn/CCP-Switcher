@@ -1,13 +1,9 @@
 {{define "provider_form.html"}}
-<section class="hero form-hero">
-  <div class="hero-copy">
-    <p class="eyebrow">Provider Edit</p>
-    <h2>{{if .Provider.ID}}编辑{{else}}新增{{end}} {{kindLabel .Provider.Kind}} 供应商</h2>
-    <p class="subtle">保存只写入数据库。真正覆盖本机 CLI 配置，要在供应商列表里执行“切换”。</p>
-  </div>
-</section>
-
 <section class="panel form-panel">
+  <div style="margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:16px;">
+    <h2 style="margin:0 0 4px;">{{if .Provider.ID}}编辑{{else}}新增{{end}} {{kindLabel .Provider.Kind}} 供应商</h2>
+    <p class="subtle" style="margin:0;">保存只写入数据库。若该供应商为当前活跃供应商，保存后将自动热切换生效。</p>
+  </div>
   <form method="post" action="{{if .Provider.ID}}/providers/{{.Provider.ID}}{{else}}/providers{{end}}" class="provider-form">
     <input type="hidden" name="kind" value="{{.Provider.Kind}}">
 
@@ -73,7 +69,7 @@
           <p class="subtle"><strong>保持当前 / 不写入</strong>：切换时不覆盖该字段。若目标配置文件已有值，则保留原值；若首次生成配置文件，则不主动写入该字段。</p>
           <p class="subtle"><strong>Approval Policy</strong>：<code>untrusted</code> 仅对可信命令免审批；<code>on-failure</code> 先执行，失败后才请求放宽执行环境，当前 CLI 已将其标记为弃用；<code>on-request</code> 由模型决定是否申请审批；<code>never</code> 不申请审批，执行失败直接返回给模型。</p>
           <p class="subtle"><strong>Sandbox Mode</strong>：<code>read-only</code> 只读执行；<code>workspace-write</code> 允许写入当前工作区及显式授权目录；<code>danger-full-access</code> 不启用沙箱限制。</p>
-          <p class="subtle"><strong>完全放开执行</strong>：常被称为 “YOLO” 组合，对应 <code>approval_policy="never"</code> 与 <code>sandbox_mode="danger-full-access"</code>。</p>
+          <p class="subtle"><strong>完全放开执行</strong>：常被称为 "YOLO" 组合，对应 <code>approval_policy="never"</code> 与 <code>sandbox_mode="danger-full-access"</code>。</p>
         </div>
       </div>
     </div>

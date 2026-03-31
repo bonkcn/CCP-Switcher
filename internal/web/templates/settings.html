@@ -1,17 +1,10 @@
 {{define "settings.html"}}
-<section class="hero panel" style="margin-bottom: 24px;">
-  <div class="hero-copy">
-    <p class="eyebrow">访问控制</p>
-    <h2 style="font-size: 24px; margin: 0 0 8px;">系统设置</h2>
-    <p class="subtle" style="font-size: 14px;">管理 Web UI 登录凭证、Bearer Token，以及当前安装版本的检测与更新。</p>
-  </div>
-</section>
-
-<article class="panel settings-version-panel">
+<article class="panel settings-version-panel" style="margin-bottom:24px;">
   <div class="settings-version-head">
-    <div>
-      <h2>版本与更新</h2>
-      <p class="subtle">版本号采用语义化版本格式 <code>v&lt;major&gt;.&lt;minor&gt;.&lt;patch&gt;</code>。在线检查会读取当前仓库 <code>origin/main</code> 分支中的 <code>VERSION</code> 文件；一键更新会重新执行 <code>install.sh</code> 并重启服务。</p>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <h2 style="margin:0;">版本与更新</h2>
+      <span style="font-size:15px;font-weight:600;color:var(--text);">{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</span>
+      {{if .Version.UpdateAvailable}}<span class="pill status-neutral">发现新版本 {{.Version.RemoteVersion}}</span>{{end}}
     </div>
     <div class="settings-version-actions">
       <form method="post" action="/settings/version/check">
@@ -23,58 +16,6 @@
     </div>
   </div>
 
-  <div class="settings-version-grid">
-    <div class="version-card">
-      <span class="version-label">当前版本</span>
-      {{if .Version.Ready}}
-      <strong>{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</strong>
-      <p class="subtle">分支：{{if .Version.LocalBranch}}{{.Version.LocalBranch}}{{else}}未知{{end}}</p>
-      <p class="subtle">版本文件：<code>{{.Version.VersionFilePath}}</code></p>
-      {{if .Version.LocalDirty}}
-      <span class="pill status-error">本地有未提交修改</span>
-      {{else}}
-      <span class="pill status-ok">工作区干净</span>
-      {{end}}
-      {{else}}
-      <strong>不可用</strong>
-      <p class="subtle">{{.Version.RepoError}}</p>
-      {{end}}
-    </div>
-
-    <div class="version-card">
-      <span class="version-label">上游版本</span>
-      {{if .Version.RemoteChecked}}
-        {{if .Version.RemoteError}}
-        <strong>检查失败</strong>
-        <p class="subtle">{{.Version.RemoteError}}</p>
-        {{else}}
-        <strong>{{if .Version.RemoteVersion}}{{.Version.RemoteVersion}}{{else}}未知{{end}}</strong>
-        <p class="subtle">来源：<code>origin/main:VERSION</code></p>
-        {{if .Version.UpdateAvailable}}
-        <span class="pill status-neutral">发现新版本</span>
-        {{else}}
-        <span class="pill status-ok">已经最新</span>
-        {{end}}
-        {{end}}
-      {{else}}
-      <strong>未检查</strong>
-      <p class="subtle">点击“检查更新”后显示远端版本号。</p>
-      <span class="pill status-neutral">等待检测</span>
-      {{end}}
-    </div>
-
-    <div class="version-card">
-      <span class="version-label">更新源与脚本</span>
-      <strong>{{if .Version.OriginURL}}{{.Version.OriginURL}}{{else}}未读取到 origin URL{{end}}</strong>
-      <p class="subtle">仓库目录：<code>{{if .Version.RepoDir}}{{.Version.RepoDir}}{{else}}未知{{end}}</code></p>
-      <p class="subtle">安装脚本：<code>{{if .Version.InstallScriptPath}}{{.Version.InstallScriptPath}}{{else}}未知{{end}}</code></p>
-      {{if .Version.CanUpdate}}
-      <span class="pill status-ok">可执行更新</span>
-      {{else}}
-      <span class="pill status-error">缺少安装脚本</span>
-      {{end}}
-    </div>
-  </div>
 </article>
 
 <section class="grid two">

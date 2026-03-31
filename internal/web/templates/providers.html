@@ -1,23 +1,14 @@
 {{define "providers.html"}}
-<section class="hero provider-hero">
-  <div class="hero-copy">
-    <p class="eyebrow">CCP Switcher</p>
-    <h2>供应商管理</h2>
-    <p class="subtle">`Ping` 只排除地址或密钥错误。模型相关操作统一放进“模型探测”，只拉列表、只测当前选中模型，不做批量测活。</p>
-  </div>
-  <div class="actions">
-    <a class="button secondary" href="/providers/new?kind=claude">新增 Claude</a>
-    <a class="button" href="/providers/new?kind=codex">新增 Codex</a>
-  </div>
-</section>
-
 <section class="provider-section">
   <div class="section-head">
     <div>
       <h2>Claude 列表</h2>
       <p class="subtle">写入目标: <code>~/.claude/settings.json</code></p>
     </div>
-    <div class="section-badge">当前生效: <strong>{{if .ActiveClaude}}{{.ActiveClaude.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .ClaudeProviders}}</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="section-badge">当前生效: <strong>{{if .ActiveClaude}}{{.ActiveClaude.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .ClaudeProviders}}</div>
+      <a class="button secondary small" href="/providers/new?kind=claude">新增 Claude</a>
+    </div>
   </div>
 
   <div class="provider-list">
@@ -56,7 +47,7 @@
     {{else}}
     <article class="provider-empty">
       <h3>暂无 Claude 供应商</h3>
-      <p class="subtle">新增后先做 `Ping`，模型相关检查再进“模型探测”。</p>
+      <p class="subtle">新增后先做 `Ping`，模型相关检查再进"模型探测"。</p>
     </article>
     {{end}}
   </div>
@@ -68,7 +59,10 @@
       <h2>Codex 列表</h2>
       <p class="subtle">写入目标: <code>~/.codex/config.toml</code> + <code>~/.codex/auth.json</code></p>
     </div>
-    <div class="section-badge">当前生效: <strong>{{if .ActiveCodex}}{{.ActiveCodex.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .CodexProviders}}</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="section-badge">当前生效: <strong>{{if .ActiveCodex}}{{.ActiveCodex.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .CodexProviders}}</div>
+      <a class="button small" href="/providers/new?kind=codex">新增 Codex</a>
+    </div>
   </div>
 
   <div class="provider-list">
@@ -174,7 +168,7 @@
           <span class="step-no">01</span>
           <div>
             <strong>先拉取模型列表</strong>
-            <p class="subtle">这里使用你上方填写的“测试 Base URL”。如果某站点拉模型必须带 <code>/v1</code>，就在这里填带 <code>/v1</code> 的地址。</p>
+            <p class="subtle">这里使用你上方填写的"测试 Base URL"。如果某站点拉模型必须带 <code>/v1</code>，就在这里填带 <code>/v1</code> 的地址。</p>
           </div>
           <button class="button" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/models">拉取模型</button>
         </article>
@@ -183,7 +177,7 @@
           <span class="step-no">02</span>
           <div>
             <strong>从列表选择模型再测试</strong>
-            <p class="subtle">{{if .Probe.Models}}已拉取 {{len .Probe.Models}} 个模型。你也可以在拉取后把上方“测试 Base URL”改成另一个地址，再继续测 API / CLI。{{else}}未拿到列表前，不进行模型测试。{{end}}</p>
+            <p class="subtle">{{if .Probe.Models}}已拉取 {{len .Probe.Models}} 个模型。你也可以在拉取后把上方"测试 Base URL"改成另一个地址，再继续测 API / CLI。{{else}}未拿到列表前，不进行模型测试。{{end}}</p>
           </div>
         </article>
       </div>
@@ -224,7 +218,7 @@
           {{end}}
         </div>
         {{else}}
-        <p class="subtle">先点击上方“拉取模型”。测试入口会在拿到该站点真实模型列表后启用。</p>
+        <p class="subtle">先点击上方"拉取模型"。测试入口会在拿到该站点真实模型列表后启用。</p>
         {{end}}
       </section>
     </form>
