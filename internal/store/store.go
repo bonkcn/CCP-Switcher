@@ -20,6 +20,7 @@ type Store struct {
 
 type Provider struct {
 	ID                        int64
+	UID                       string
 	Kind                      string
 	Name                      string
 	BaseURL                   string
@@ -89,6 +90,7 @@ func (s *Store) migrate() error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS providers (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	uid TEXT NOT NULL DEFAULT '',
 	kind TEXT NOT NULL CHECK (kind IN ('claude', 'codex')),
 	name TEXT NOT NULL,
 	base_url TEXT NOT NULL,
@@ -135,6 +137,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 		return fmt.Errorf("apply schema: %w", err)
 	}
 	for _, stmt := range []string{
+		`ALTER TABLE providers ADD COLUMN uid TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE providers ADD COLUMN codex_approval_policy TEXT NOT NULL DEFAULT 'on-request'`,
 		`ALTER TABLE providers ADD COLUMN codex_sandbox_mode TEXT NOT NULL DEFAULT 'workspace-write'`,
 	} {
@@ -142,12 +145,18 @@ CREATE TABLE IF NOT EXISTS app_settings (
 			return fmt.Errorf("apply schema migration %q: %w", stmt, err)
 		}
 	}
+	if err := s.ensureProviderUIDs(); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_providers_uid ON providers(uid) WHERE uid <> ''`); err != nil {
+		return fmt.Errorf("create provider uid index: %w", err)
+	}
 	return nil
 }
 
 func (s *Store) ListProviders(kind string) ([]Provider, error) {
 	query := `
-SELECT id, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
+SELECT id, uid, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
        codex_approval_policy, codex_sandbox_mode,
        claude_default_mode, claude_use_sandbox, claude_skip_dangerous_prompt,
        last_test_status, last_test_message, last_test_at, created_at, updated_at
@@ -181,7 +190,7 @@ FROM providers`
 
 func (s *Store) GetProvider(id int64) (Provider, error) {
 	row := s.db.QueryRow(`
-SELECT id, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
+SELECT id, uid, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
        codex_approval_policy, codex_sandbox_mode,
        claude_default_mode, claude_use_sandbox, claude_skip_dangerous_prompt,
        last_test_status, last_test_message, last_test_at, created_at, updated_at
@@ -211,6 +220,14 @@ func (s *Store) SaveProvider(provider *Provider) error {
 	if provider.Secret == "" {
 		return errors.New("provider secret is required")
 	}
+	provider.UID = strings.TrimSpace(provider.UID)
+	if provider.UID == "" {
+		uid, err := newProviderUID()
+		if err != nil {
+			return err
+		}
+		provider.UID = uid
+	}
 
 	ciphertext, err := app.EncryptString(s.masterKey, provider.Secret)
 	if err != nil {
@@ -221,11 +238,12 @@ func (s *Store) SaveProvider(provider *Provider) error {
 	if provider.ID == 0 {
 		result, err := s.db.Exec(`
 INSERT INTO providers (
-	kind, name, base_url, secret_ciphertext, model, reasoning_effort,
+	uid, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
 	codex_approval_policy, codex_sandbox_mode,
 	claude_default_mode, claude_use_sandbox, claude_skip_dangerous_prompt,
 	last_test_status, last_test_message, last_test_at, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', ?, ?)`,
+			provider.UID,
 			provider.Kind,
 			strings.TrimSpace(provider.Name),
 			strings.TrimSpace(provider.BaseURL),
@@ -250,11 +268,12 @@ INSERT INTO providers (
 
 	_, err = s.db.Exec(`
 UPDATE providers
-SET name = ?, base_url = ?, secret_ciphertext = ?, model = ?, reasoning_effort = ?,
+SET uid = ?, name = ?, base_url = ?, secret_ciphertext = ?, model = ?, reasoning_effort = ?,
     codex_approval_policy = ?, codex_sandbox_mode = ?,
     claude_default_mode = ?, claude_use_sandbox = ?, claude_skip_dangerous_prompt = ?,
     updated_at = ?
 WHERE id = ?`,
+		provider.UID,
 		strings.TrimSpace(provider.Name),
 		strings.TrimSpace(provider.BaseURL),
 		ciphertext,
@@ -320,7 +339,7 @@ func (s *Store) ListActiveProviderIDs() (map[string]int64, error) {
 
 func (s *Store) GetActiveProvider(kind string) (*Provider, error) {
 	row := s.db.QueryRow(`
-SELECT p.id, p.kind, p.name, p.base_url, p.secret_ciphertext, p.model, p.reasoning_effort,
+SELECT p.id, p.uid, p.kind, p.name, p.base_url, p.secret_ciphertext, p.model, p.reasoning_effort,
        p.codex_approval_policy, p.codex_sandbox_mode,
        p.claude_default_mode, p.claude_use_sandbox, p.claude_skip_dangerous_prompt,
        p.last_test_status, p.last_test_message, p.last_test_at, p.created_at, p.updated_at
@@ -559,6 +578,7 @@ func (s *Store) scanProvider(sc scanner) (Provider, error) {
 
 	err := sc.Scan(
 		&provider.ID,
+		&provider.UID,
 		&provider.Kind,
 		&provider.Name,
 		&provider.BaseURL,
@@ -592,6 +612,58 @@ func (s *Store) scanProvider(sc scanner) (Provider, error) {
 	provider.CreatedAt = parseTime(createdAt)
 	provider.UpdatedAt = parseTime(updatedAt)
 	return provider, nil
+}
+
+func (s *Store) ensureProviderUIDs() error {
+	rows, err := s.db.Query(`SELECT id FROM providers WHERE uid = ''`)
+	if err != nil {
+		return fmt.Errorf("query providers missing uid: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("scan provider missing uid: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate providers missing uid: %w", err)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin uid migration: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, id := range ids {
+		uid, err := newProviderUID()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE providers SET uid = ? WHERE id = ?`, uid, id); err != nil {
+			return fmt.Errorf("assign provider uid: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit uid migration: %w", err)
+	}
+	return nil
+}
+
+func newProviderUID() (string, error) {
+	uid, err := app.RandomToken(16)
+	if err != nil {
+		return "", fmt.Errorf("generate provider uid: %w", err)
+	}
+	return uid, nil
 }
 
 func boolToInt(value bool) int {

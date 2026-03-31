@@ -1,38 +1,53 @@
 {{define "provider_form.html"}}
 <section class="panel form-panel">
   <div style="margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:16px;">
-    <h2 style="margin:0 0 4px;">{{if .Provider.ID}}编辑{{else}}新增{{end}} {{kindLabel .Provider.Kind}} 供应商</h2>
-    <p class="subtle" style="margin:0;">保存只写入数据库。若该供应商为当前活跃供应商，保存后将自动热切换生效。</p>
+    <h2 style="margin:0 0 6px;">
+      {{if .Provider.ID}}编辑{{else}}新增{{end}} {{kindLabel .Provider.Kind}} 供应商
+      <div class="tooltip-wrap">
+        <span class="tooltip-icon">i</span>
+        <div class="tooltip-content">配置保存仅写入本地数据库。如果在活跃状态修改，配置会自动热重载推至 ~/.codex 或 ~/.claude，生效于下次运行。</div>
+      </div>
+    </h2>
   </div>
+  
   <form method="post" action="{{if .Provider.ID}}/providers/{{.Provider.ID}}{{else}}/providers{{end}}" class="provider-form">
     <input type="hidden" name="kind" value="{{.Provider.Kind}}">
 
-    <label>
-      <span class="field-label">显示名称</span>
-      <input type="text" name="name" value="{{.Provider.Name}}" placeholder="eg. Main Gateway" required>
-    </label>
+    <div class="form-grid two">
+      <label>
+        <span class="field-label" style="font-weight:600;">显示名称</span>
+        <input type="text" name="name" value="{{.Provider.Name}}" placeholder="eg. Main Gateway" required>
+      </label>
+
+      <label>
+        <span class="field-label" style="font-weight:600;">默认模型</span>
+        <input type="text" name="model" value="{{.Provider.Model}}" placeholder="{{if eq .Provider.Kind "claude"}}claude-sonnet-4-20250514{{else}}gpt-5.4{{end}}">
+      </label>
+    </div>
 
     <label>
-      <span class="field-label">Base URL</span>
+      <span class="field-label" style="font-weight:600;">Base URL</span>
       <input type="url" name="base_url" value="{{.Provider.BaseURL}}" placeholder="https://api.example.com/v1" required>
     </label>
 
     <label>
-      <span class="field-label">{{if eq .Provider.Kind "claude"}}认证 Token{{else}}API Key{{end}}</span>
+      <span class="field-label" style="font-weight:600;">{{if eq .Provider.Kind "claude"}}认证 Token{{else}}API Key{{end}}</span>
       <input type="password" name="secret" placeholder="{{if .Provider.ID}}输入新密钥以更新，留空保持原样{{else}}sk-xxxxxxxx{{end}}">
     </label>
 
-    <label>
-      <span class="field-label">默认模型</span>
-      <input type="text" name="model" value="{{.Provider.Model}}" placeholder="{{if eq .Provider.Kind "claude"}}claude-sonnet-4-20250514{{else}}gpt-5.4{{end}}">
-    </label>
-
     {{if eq .Provider.Kind "codex"}}
+    <h3 style="margin:8px 0 0;font-size:12px;color:var(--text);border-bottom:1px solid var(--border);padding-bottom:8px;">配置选项</h3>
     <div class="form-grid two">
       <label>
-        <span class="field-label">Reasoning Effort</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="field-label">Reasoning Effort</span>
+          <div class="tooltip-wrap">
+            <span class="tooltip-icon">i</span>
+            <div class="tooltip-content">控制兼容模型（如 O 系列）的内置推理强度。保持当前可跳过该字段的热更新写入。</div>
+          </div>
+        </div>
         <select name="reasoning_effort">
-          <option value="" {{if eq .Provider.ReasoningEffort ""}}selected{{end}}>保持当前 / 不额外写入</option>
+          <option value="" {{if eq .Provider.ReasoningEffort ""}}selected{{end}}>保持当前</option>
           <option value="low" {{if eq .Provider.ReasoningEffort "low"}}selected{{end}}>low</option>
           <option value="medium" {{if eq .Provider.ReasoningEffort "medium"}}selected{{end}}>medium</option>
           <option value="high" {{if eq .Provider.ReasoningEffort "high"}}selected{{end}}>high</option>
@@ -41,43 +56,50 @@
       </label>
 
       <label>
-        <span class="field-label">Approval Policy</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="field-label">Approval Policy</span>
+          <div class="tooltip-wrap">
+            <span class="tooltip-icon">i</span>
+            <div class="tooltip-content">命令审计策略。<br><br><code>untrusted</code>：仅完全可信的内部指令免审批。<br><code>on-failure</code>：(不常用) 执行环境受限报错后再提示。<br><code>on-request</code>：由模型决定是否需要用户交互审批。<br><code>never</code>：不触发审批终端交互，不建议在线上使用。</div>
+          </div>
+        </div>
         <select name="codex_approval_policy">
-          <option value="" {{if eq .Provider.CodexApprovalPolicy ""}}selected{{end}}>保持当前 / 不写入</option>
+          <option value="" {{if eq .Provider.CodexApprovalPolicy ""}}selected{{end}}>保持当前</option>
           <option value="untrusted" {{if eq .Provider.CodexApprovalPolicy "untrusted"}}selected{{end}}>untrusted</option>
           <option value="on-failure" {{if eq .Provider.CodexApprovalPolicy "on-failure"}}selected{{end}}>on-failure</option>
           <option value="on-request" {{if eq .Provider.CodexApprovalPolicy "on-request"}}selected{{end}}>on-request</option>
           <option value="never" {{if eq .Provider.CodexApprovalPolicy "never"}}selected{{end}}>never</option>
         </select>
       </label>
-    </div>
 
-    <div class="form-grid two">
       <label>
-        <span class="field-label">Sandbox Mode</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="field-label">Sandbox Mode</span>
+          <div class="tooltip-wrap">
+            <span class="tooltip-icon">i</span>
+            <div class="tooltip-content">Docker 文件系统边界策略。<br><br><code>read-only</code>：强制全系统只读。<br><code>workspace-write</code>：仅允许对显式挂载路径执行写入改动。<br><code>danger-full-access</code>：完全越狱关闭读写隔离。当叠加 <code>never</code> 审批时即构成全量 Yolo 模式，非常危险。</div>
+          </div>
+        </div>
         <select name="codex_sandbox_mode">
-          <option value="" {{if eq .Provider.CodexSandboxMode ""}}selected{{end}}>保持当前 / 不写入</option>
+          <option value="" {{if eq .Provider.CodexSandboxMode ""}}selected{{end}}>保持当前</option>
           <option value="read-only" {{if eq .Provider.CodexSandboxMode "read-only"}}selected{{end}}>read-only</option>
           <option value="workspace-write" {{if eq .Provider.CodexSandboxMode "workspace-write"}}selected{{end}}>workspace-write</option>
           <option value="danger-full-access" {{if eq .Provider.CodexSandboxMode "danger-full-access"}}selected{{end}}>danger-full-access</option>
         </select>
       </label>
-
-      <div class="form-note-block">
-        <span class="field-label">执行模式说明</span>
-        <div class="mode-guide">
-          <p class="subtle"><strong>保持当前 / 不写入</strong>：切换时不覆盖该字段。若目标配置文件已有值，则保留原值；若首次生成配置文件，则不主动写入该字段。</p>
-          <p class="subtle"><strong>Approval Policy</strong>：<code>untrusted</code> 仅对可信命令免审批；<code>on-failure</code> 先执行，失败后才请求放宽执行环境，当前 CLI 已将其标记为弃用；<code>on-request</code> 由模型决定是否申请审批；<code>never</code> 不申请审批，执行失败直接返回给模型。</p>
-          <p class="subtle"><strong>Sandbox Mode</strong>：<code>read-only</code> 只读执行；<code>workspace-write</code> 允许写入当前工作区及显式授权目录；<code>danger-full-access</code> 不启用沙箱限制。</p>
-          <p class="subtle"><strong>完全放开执行</strong>：常被称为 "YOLO" 组合，对应 <code>approval_policy="never"</code> 与 <code>sandbox_mode="danger-full-access"</code>。</p>
-        </div>
-      </div>
     </div>
     {{end}}
 
     {{if eq .Provider.Kind "claude"}}
+    <h3 style="margin:8px 0 0;font-size:12px;color:var(--text);border-bottom:1px solid var(--border);padding-bottom:8px;">原生 Claude 权限选项</h3>
     <label>
-      <span class="field-label">权限模式</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="field-label">CLI Default Mode</span>
+        <div class="tooltip-wrap">
+          <span class="tooltip-icon">i</span>
+          <div class="tooltip-content">Claude Code CLI 初始化权限环境。<br><br><code>bypassPermissions</code> 跳过绝大多数确认动作（等效白皮书模式但略带控制），<code>acceptEdits</code> 默认允许代码补丁生效。<code>plan</code> 严格先计划再执行。</div>
+        </div>
+      </div>
       <select name="claude_default_mode">
         <option value="default" {{if eq .Provider.ClaudeDefaultMode "default"}}selected{{end}}>default</option>
         <option value="bypassPermissions" {{if eq .Provider.ClaudeDefaultMode "bypassPermissions"}}selected{{end}}>bypassPermissions</option>
@@ -90,16 +112,18 @@
     <div class="checkbox-grid">
       <label class="checkbox-card">
         <input type="checkbox" name="claude_use_sandbox" {{if .Provider.ClaudeUseSandbox}}checked{{end}}>
-        <span>写入 <code>IS_SANDBOX=1</code></span>
+        <span><code>IS_SANDBOX=1</code></span>
+        <div class="tooltip-wrap"><span class="tooltip-icon">i</span><div class="tooltip-content">注入非持久进程的环境隔离标识，拦截底层 syscall</div></div>
       </label>
       <label class="checkbox-card">
         <input type="checkbox" name="claude_skip_dangerous_prompt" {{if .Provider.ClaudeSkipDangerousPrompt}}checked{{end}}>
-        <span>写入 <code>skipDangerousModePermissionPrompt=true</code></span>
+        <span>静默模式 (跳过危险指令拦截)</span>
+        <div class="tooltip-wrap"><span class="tooltip-icon">i</span><div class="tooltip-content">注入 <code>skipDangerousModePermissionPrompt=true</code>，规避 rm -rf / DROP TABLE 拦截</div></div>
       </label>
     </div>
     {{end}}
 
-    <div class="actions form-actions">
+    <div class="actions form-actions" style="margin-top:20px;">
       <button class="button" type="submit">保存配置</button>
       <a class="button secondary" href="/providers">返回列表</a>
     </div>

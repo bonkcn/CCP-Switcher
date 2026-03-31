@@ -2,11 +2,12 @@
 
 CCP Switcher 是一款面向 Linux VPS 的单机 WebUI，用于管理并切换 Claude Code 与 Codex 的供应商配置。系统采用 Go、SQLite 与服务端渲染 HTML 实现，适合部署在仅开放反向代理入口的服务器环境中。
 
-当前版本：`v0.1.0`
+当前版本：`v0.2.0`
 
 ## 核心能力
 
 - 供应商配置的新增、编辑、删除与切换
+- 供应商配置导出为 JSON，并支持导入回放
 - Claude 与 Codex 配置文件的分离管理
 - Base URL、API Key / Token、默认模型等参数的持久化保存
 - 连通性测试
@@ -90,6 +91,37 @@ CCP Switcher 是一款面向 Linux VPS 的单机 WebUI，用于管理并切换 C
 
 - 某些站点拉取模型列表必须使用带 `/v1` 的路径
 - 某些站点的 CLI 测试或 API 测试却要求不带 `/v1`
+
+## 供应商导入导出
+
+供应商页面支持一键导出与导入：
+
+- 导出会生成一个 JSON 文件，包含供应商配置、当前生效状态，以及明文 API Key / Token
+- 导入会优先按供应商 `uid` 匹配；若目标库中不存在该 `uid`，则回退到同类型同名项自动合并
+- 导入页面默认勾选“同步当前生效状态”，导入完成后会立即把导出文件记录的当前供应商写回本机配置文件
+
+因此，导出文件应视为敏感凭据备份，请妥善保存。
+
+### HTTP 入口
+
+- 导出：`GET /providers/export`
+- 导入：`POST /providers/import`
+  表单字段：`file=@providers.json`
+  可选字段：`restore_active=on`
+
+### curl 示例
+
+```bash
+curl -OJ -H "Authorization: Bearer <API_TOKEN>" \
+  http://127.0.0.1:4680/providers/export
+```
+
+```bash
+curl -H "Authorization: Bearer <API_TOKEN>" \
+  -F "file=@ccp-switcher-providers.json" \
+  -F "restore_active=on" \
+  http://127.0.0.1:4680/providers/import
+```
 
 ## Codex 执行模式说明
 

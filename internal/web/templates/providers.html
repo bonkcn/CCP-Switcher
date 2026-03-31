@@ -1,9 +1,12 @@
 {{define "providers.html"}}
 <section class="provider-section">
   <div class="section-head">
-    <div>
+    <div style="display:flex;align-items:center;gap:8px;">
       <h2>Claude 列表</h2>
-      <p class="subtle">写入目标: <code>~/.claude/settings.json</code></p>
+      <div class="tooltip-wrap right">
+        <span class="tooltip-icon">i</span>
+        <div class="tooltip-content">配置将应用至 <code>~/.claude/settings.json</code>。新增后请先测试连通性。</div>
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <div class="section-badge">当前生效: <strong>{{if .ActiveClaude}}{{.ActiveClaude.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .ClaudeProviders}}</div>
@@ -29,35 +32,41 @@
           {{if .ClaudeSkipDangerousPrompt}}<span class="meta-pill">跳过危险确认</span>{{end}}
           {{if .ClaudeUseSandbox}}<span class="meta-pill">IS_SANDBOX=1</span>{{end}}
         </div>
-        <div class="row-result">
-          <span class="row-result-label">最近测试</span>
-          <span>{{if .LastTestMessage}}{{firstLine .LastTestMessage}}{{else}}尚未执行探测{{end}}</span>
+        <div class="row-result" style="display:flex;align-items:center;gap:6px;font-size:11px;">
+          <span class="muted">最近测试</span>
+          <span class="row-result-brief">{{testStatusLabel .LastTestStatus .LastTestMessage}}</span>
+          {{if .LastTestMessage}}
+          <div class="tooltip-wrap">
+             <span class="tooltip-icon" style="cursor:zoom-in;">+</span>
+             <div class="tooltip-content" style="white-space:pre-wrap;max-width:400px;">{{.LastTestMessage}}</div>
+          </div>
+          {{end}}
         </div>
       </div>
       <div class="row-actions">
         <form method="post" action="/providers/{{.ID}}/test/connectivity"><button class="button ghost small" type="submit">Ping</button></form>
-        <a class="button ghost small" href="/providers/{{.ID}}/probe">模型探测</a>
+        <a class="button ghost small" href="/providers/{{.ID}}/probe">探测</a>
         <a class="button ghost small" href="/providers/{{.ID}}/edit">编辑</a>
         <form method="post" action="/providers/{{.ID}}/delete" onsubmit="return confirm('确认删除该供应商配置？');"><button class="button ghost-danger small" type="submit">删除</button></form>
         {{if not (isActive $.ActiveIDs .)}}
-        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit">切换</button></form>
+        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit">切换使用</button></form>
         {{end}}
       </div>
     </article>
     {{else}}
-    <article class="provider-empty">
-      <h3>暂无 Claude 供应商</h3>
-      <p class="subtle">新增后先做 `Ping`，模型相关检查再进"模型探测"。</p>
-    </article>
+    <article class="provider-empty">暂无 Claude 供应商</article>
     {{end}}
   </div>
 </section>
 
 <section class="provider-section">
   <div class="section-head">
-    <div>
+    <div style="display:flex;align-items:center;gap:8px;">
       <h2>Codex 列表</h2>
-      <p class="subtle">写入目标: <code>~/.codex/config.toml</code> + <code>~/.codex/auth.json</code></p>
+      <div class="tooltip-wrap right">
+        <span class="tooltip-icon">i</span>
+        <div class="tooltip-content">配置将应用至 <code>~/.codex/config.toml</code> 与 <code>auth.json</code>。探测前需选定模型。</div>
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <div class="section-badge">当前生效: <strong>{{if .ActiveCodex}}{{.ActiveCodex.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .CodexProviders}}</div>
@@ -82,28 +91,31 @@
           <span class="meta-pill">推理: {{optionalLabel .ReasoningEffort "保持当前"}}</span>
           <span class="meta-pill">审批: {{optionalLabel .CodexApprovalPolicy "保持当前"}}</span>
           <span class="meta-pill">沙箱: {{optionalLabel .CodexSandboxMode "保持当前"}}</span>
-          {{if and (eq .CodexApprovalPolicy "never") (eq .CodexSandboxMode "danger-full-access")}}<span class="meta-pill">完全放开执行</span>{{end}}
+          {{if and (eq .CodexApprovalPolicy "never") (eq .CodexSandboxMode "danger-full-access")}}<span class="meta-pill" style="border-color:var(--danger-text);color:var(--danger-text);">全量执行</span>{{end}}
         </div>
-        <div class="row-result">
-          <span class="row-result-label">最近测试</span>
-          <span>{{if .LastTestMessage}}{{firstLine .LastTestMessage}}{{else}}尚未执行探测{{end}}</span>
+        <div class="row-result" style="display:flex;align-items:center;gap:6px;font-size:11px;">
+          <span class="muted">最近测试</span>
+          <span class="row-result-brief">{{testStatusLabel .LastTestStatus .LastTestMessage}}</span>
+          {{if .LastTestMessage}}
+          <div class="tooltip-wrap">
+             <span class="tooltip-icon" style="cursor:zoom-in;">+</span>
+             <div class="tooltip-content" style="white-space:pre-wrap;max-width:400px;">{{.LastTestMessage}}</div>
+          </div>
+          {{end}}
         </div>
       </div>
       <div class="row-actions">
         <form method="post" action="/providers/{{.ID}}/test/connectivity"><button class="button ghost small" type="submit">Ping</button></form>
-        <a class="button ghost small" href="/providers/{{.ID}}/probe">模型探测</a>
+        <a class="button ghost small" href="/providers/{{.ID}}/probe">探测</a>
         <a class="button ghost small" href="/providers/{{.ID}}/edit">编辑</a>
         <form method="post" action="/providers/{{.ID}}/delete" onsubmit="return confirm('确认删除该供应商配置？');"><button class="button ghost-danger small" type="submit">删除</button></form>
         {{if not (isActive $.ActiveIDs .)}}
-        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit">切换</button></form>
+        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit">切换使用</button></form>
         {{end}}
       </div>
     </article>
     {{else}}
-    <article class="provider-empty">
-      <h3>暂无 Codex 供应商</h3>
-      <p class="subtle">如果要做第三方中转兼容性验证，先选一个目标模型，再跑 API / CLI 单测。</p>
-    </article>
+    <article class="provider-empty">暂无 Codex 供应商</article>
     {{end}}
   </div>
 </section>
@@ -113,150 +125,84 @@
   <div class="modal-scrim"></div>
   <section class="modal-card">
     <div class="modal-head">
-      <div>
-        <p class="eyebrow">Model Probe</p>
-        <h2>{{kindLabel .Probe.Provider.Kind}} · {{.Probe.Provider.Name}}</h2>
-        <p class="subtle">这里只做单模型验证，不会自动批测。先拉列表，再把你要的一个模型填进去，分别跑 API 和 CLI。</p>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div>
+          <h2 style="margin:0;">探测模型 · {{kindLabel .Probe.Provider.Kind}}</h2>
+          <p class="muted" style="margin:4px 0 0;">{{.Probe.Provider.Name}}</p>
+        </div>
+        <div class="tooltip-wrap bottom-left">
+          <span class="tooltip-icon">i</span>
+          <div class="tooltip-content">先拉取模型列表，选中目标后再运行探测流程。CLI 测试会在只读/离屏配置下执行。</div>
+        </div>
       </div>
-      <a class="button secondary small" href="/providers">关闭</a>
+      <a class="button ghost" href="/providers">✕</a>
     </div>
 
-    <div class="probe-summary">
-      <div class="summary-tile">
-        <span>保存 Base URL</span>
-        <code>{{.Probe.Provider.BaseURL}}</code>
-      </div>
-      <div class="summary-tile">
-        <span>默认模型</span>
-        <code>{{if .Probe.Provider.Model}}{{.Probe.Provider.Model}}{{else}}未指定{{end}}</code>
-      </div>
-      <div class="summary-tile">
-        <span>接口模式</span>
-        <code>{{if eq .Probe.Provider.Kind "codex"}}/models + /responses{{else}}/models + /messages{{end}}</code>
-      </div>
-      <div class="summary-tile">
-        <span>CLI 模式</span>
-        <code>{{if eq .Probe.Provider.Kind "codex"}}codex exec{{else}}claude -p{{end}}</code>
-      </div>
-    </div>
-
-    <form method="post" action="/providers/{{.Probe.Provider.ID}}/probe/model" class="probe-form">
+    <form method="post" action="/providers/{{.Probe.Provider.ID}}/probe/model">
       {{range .Probe.Models}}
       <input type="hidden" name="probe_models" value="{{.}}">
       {{end}}
       <input id="probe-model-input" type="hidden" name="probe_model" value="{{.Probe.SelectedModel}}">
       {{if .Probe.FetchResult}}
-      <input type="hidden" name="probe_fetch_status" value="{{.Probe.FetchResult.Status}}">
-      <textarea name="probe_fetch_message" class="sr-only">{{.Probe.FetchResult.Message}}</textarea>
+      <input type="hidden" name="probe_fetch_status" value="{{.Probe.FetchResult.Status}}"><textarea name="probe_fetch_message" class="sr-only">{{.Probe.FetchResult.Message}}</textarea>
       {{end}}
       {{if .Probe.APIResult}}
-      <input type="hidden" name="probe_api_status" value="{{.Probe.APIResult.Status}}">
-      <textarea name="probe_api_message" class="sr-only">{{.Probe.APIResult.Message}}</textarea>
+      <input type="hidden" name="probe_api_status" value="{{.Probe.APIResult.Status}}"><textarea name="probe_api_message" class="sr-only">{{.Probe.APIResult.Message}}</textarea>
       {{end}}
       {{if .Probe.CLIResult}}
-      <input type="hidden" name="probe_cli_status" value="{{.Probe.CLIResult.Status}}">
-      <textarea name="probe_cli_message" class="sr-only">{{.Probe.CLIResult.Message}}</textarea>
+      <input type="hidden" name="probe_cli_status" value="{{.Probe.CLIResult.Status}}"><textarea name="probe_cli_message" class="sr-only">{{.Probe.CLIResult.Message}}</textarea>
       {{end}}
 
-      <label>
-        <span class="field-label">测试 Base URL</span>
-        <input type="url" name="probe_base_url" value="{{.Probe.TestBaseURL}}" placeholder="https://api.example.com/v1" required>
-      </label>
-
-      <div class="probe-steps">
-        <article class="step-card step-card-active">
-          <span class="step-no">01</span>
-          <div>
-            <strong>先拉取模型列表</strong>
-            <p class="subtle">这里使用你上方填写的"测试 Base URL"。如果某站点拉模型必须带 <code>/v1</code>，就在这里填带 <code>/v1</code> 的地址。</p>
+      <div class="grid two" style="margin-bottom:16px;">
+        <label>
+          <span class="muted">测试 Base URL /v1</span>
+          <div style="display:flex;gap:8px;">
+            <input type="url" name="probe_base_url" value="{{.Probe.TestBaseURL}}" required>
+            <button class="button secondary" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/models">拉取库</button>
           </div>
-          <button class="button" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/models">拉取模型</button>
-        </article>
-
-        <article class="step-card {{if .Probe.Models}}step-card-ready{{end}}">
-          <span class="step-no">02</span>
-          <div>
-            <strong>从列表选择模型再测试</strong>
-            <p class="subtle">{{if .Probe.Models}}已拉取 {{len .Probe.Models}} 个模型。你也可以在拉取后把上方"测试 Base URL"改成另一个地址，再继续测 API / CLI。{{else}}未拿到列表前，不进行模型测试。{{end}}</p>
-          </div>
-        </article>
-      </div>
-
-      <div class="probe-hint">
-        <strong>说明</strong>
-        <p>{{if eq .Probe.Provider.Kind "codex"}}API 测试会对选中模型发一次最小 `responses` 请求。CLI 测试会用临时 `~/.codex` 配置跑一次真实 `codex exec`，为了避免副作用，测试时强制 `read-only` 沙箱。{{else}}API 测试会对选中模型发一次最小 `messages` 请求。CLI 测试会用临时 `~/.claude/settings.json` 跑一次真实 `claude -p`。{{end}} 浮层会保留本次已得到的列表结果和上一次 API / CLI 结果，不会点一次就把前一个结果冲掉。</p>
-      </div>
-
-      <section class="model-list-panel">
-        <div class="probe-result-head">
-          <h3>已拉取模型</h3>
-          <span class="subtle">{{if .Probe.Models}}{{len .Probe.Models}} 个{{else}}暂无{{end}}</span>
-        </div>
-        {{if .Probe.Models}}
-        <div class="selected-model-card">
-          <div>
-            <span class="field-label">当前选中模型</span>
-            <strong id="probe-model-display">{{if .Probe.SelectedModel}}{{.Probe.SelectedModel}}{{else}}未选择{{end}}</strong>
-          </div>
-          <div class="selected-model-actions">
-            <button class="button secondary" type="button" data-copy-target="#probe-model-input" {{if not .Probe.SelectedModel}}disabled{{end}}>复制模型名</button>
-            <button class="button ghost" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/model" {{if not .Probe.SelectedModel}}disabled{{end}}>保存为默认模型</button>
-            <button class="button" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/api" {{if not .Probe.SelectedModel}}disabled{{end}}>API 测试</button>
-            <button class="button" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/cli" {{if not .Probe.SelectedModel}}disabled{{end}}>CLI 测试</button>
+        </label>
+        
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;">
+          <div class="selected-model-card" style="margin:0;">
+             <div><span class="muted" style="font-size:10px;">已选择模型：</span><strong id="probe-model-display" style="font-size:13px;margin-left:8px;">{{if .Probe.SelectedModel}}{{.Probe.SelectedModel}}{{else}}未选择{{end}}</strong></div>
+             <div class="selected-model-actions" style="gap:4px;">
+               <button class="button secondary small" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/api" {{if not .Probe.SelectedModel}}disabled{{end}}>测接口</button>
+               <button class="button secondary small" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/cli" {{if not .Probe.SelectedModel}}disabled{{end}}>测CLI</button>
+               <button class="button small" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/model" {{if not .Probe.SelectedModel}}disabled{{end}}>设为默认</button>
+             </div>
           </div>
         </div>
+      </div>
 
-        <div class="model-list">
-          {{range .Probe.Models}}
-          <div class="model-row {{if eq $.Probe.SelectedModel .}}model-row-selected{{end}}">
-            <button class="model-name" type="button" data-select-model="{{.}}">{{.}}</button>
-            <div class="model-actions">
-              <button class="button ghost small" type="button" data-select-model="{{.}}">选择</button>
-              <button class="button ghost small" type="button" data-copy-text="{{.}}">复制</button>
+      <div class="grid two" style="margin-bottom:16px;">
+        <div class="model-list-panel">
+          <div class="probe-result-head"><h3>可选模型 ({{len .Probe.Models}})</h3></div>
+          {{if .Probe.Models}}
+          <div class="model-list">
+            {{range .Probe.Models}}
+            <div class="model-row {{if eq $.Probe.SelectedModel .}}model-row-selected{{end}}">
+              <button class="model-name" type="button" data-select-model="{{.}}">{{.}}</button>
+              <div class="model-actions"><button class="button ghost small" type="button" data-copy-text="{{.}}">复制</button></div>
             </div>
+            {{end}}
           </div>
+          {{else}}
+          <p class="muted">暂未拉取或无数据。</p>
           {{end}}
         </div>
-        {{else}}
-        <p class="subtle">先点击上方"拉取模型"。测试入口会在拿到该站点真实模型列表后启用。</p>
-        {{end}}
-      </section>
+
+        <div class="probe-grid" style="grid-template-columns:1fr;margin-bottom:0;align-content:start;">
+          <div class="probe-result-card">
+            <div class="probe-result-head"><h3>接口联通 (API)</h3> {{if .Probe.APIResult}}<span class="pill {{statusClass .Probe.APIResult.Status}}">{{.Probe.APIResult.Status}}</span>{{end}}</div>
+            <div class="probe-result-body {{if .Probe.APIResult}}{{statusClass .Probe.APIResult.Status}}{{else}}status-neutral{{end}}">{{if .Probe.APIResult}}{{.Probe.APIResult.Message}}{{else}}按左侧等待测试。{{end}}</div>
+          </div>
+          <div class="probe-result-card">
+            <div class="probe-result-head"><h3>底座对接 (CLI)</h3> {{if .Probe.CLIResult}}<span class="pill {{statusClass .Probe.CLIResult.Status}}">{{.Probe.CLIResult.Status}}</span>{{end}}</div>
+            <div class="probe-result-body {{if .Probe.CLIResult}}{{statusClass .Probe.CLIResult.Status}}{{else}}status-neutral{{end}}">{{if .Probe.CLIResult}}{{.Probe.CLIResult.Message}}{{else}}按左侧等待测试。{{end}}</div>
+          </div>
+        </div>
+      </div>
     </form>
-
-    <div class="probe-grid">
-      <article class="probe-result-card">
-        <div class="probe-result-head">
-          <h3>模型列表</h3>
-          {{if .Probe.FetchResult}}<span class="pill {{statusClass .Probe.FetchResult.Status}}">{{.Probe.FetchResult.Status}}</span>{{end}}
-        </div>
-        <p class="subtle">只请求一次 `/models`，不测试任何模型是否可用。</p>
-        <div class="probe-result-body {{if .Probe.FetchResult}}{{statusClass .Probe.FetchResult.Status}}{{else}}status-neutral{{end}}">
-          {{if .Probe.FetchResult}}{{.Probe.FetchResult.Message}}{{else}}尚未拉取模型列表。{{end}}
-        </div>
-      </article>
-
-      <article class="probe-result-card">
-        <div class="probe-result-head">
-          <h3>API 测试</h3>
-          {{if .Probe.APIResult}}<span class="pill {{statusClass .Probe.APIResult.Status}}">{{.Probe.APIResult.Status}}</span>{{end}}
-        </div>
-        <p class="subtle">{{if eq .Probe.Provider.Kind "codex"}}验证该模型 ID 是否能完成最小 `responses` 调用。{{else}}验证该模型 ID 是否能完成最小 `messages` 调用。{{end}}</p>
-        <div class="probe-result-body {{if .Probe.APIResult}}{{statusClass .Probe.APIResult.Status}}{{else}}status-neutral{{end}}">
-          {{if .Probe.APIResult}}{{.Probe.APIResult.Message}}{{else}}尚未执行 API 测试。{{end}}
-        </div>
-      </article>
-
-      <article class="probe-result-card">
-        <div class="probe-result-head">
-          <h3>CLI 测试</h3>
-          {{if .Probe.CLIResult}}<span class="pill {{statusClass .Probe.CLIResult.Status}}">{{.Probe.CLIResult.Status}}</span>{{end}}
-        </div>
-        <p class="subtle">{{if eq .Probe.Provider.Kind "codex"}}更接近真实 Codex CLI 走法，但仍是最小化非交互测试，不代表所有工具链都 100% 可用。{{else}}更接近真实 Claude CLI 走法，但仍是最小化非交互测试，不代表所有交互场景都 100% 可用。{{end}}</p>
-        <div class="probe-result-body {{if .Probe.CLIResult}}{{statusClass .Probe.CLIResult.Status}}{{else}}status-neutral{{end}}">
-          {{if .Probe.CLIResult}}{{.Probe.CLIResult.Message}}{{else}}尚未执行 CLI 测试。{{end}}
-        </div>
-      </article>
-    </div>
   </section>
 </div>
 {{end}}

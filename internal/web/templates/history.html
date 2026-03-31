@@ -1,48 +1,50 @@
 {{define "history.html"}}
-<section class="hero panel" style="margin-bottom: 24px;">
-  <div class="hero-copy">
-    <p class="eyebrow">审计与日志</p>
-    <h2 style="font-size: 24px; margin: 0 0 8px;">切换历史记录</h2>
-    <p class="subtle" style="font-size: 14px;">此表格记录了每次由于控制台下发的供应商切换动作引发的环境变量更迭和备份路径。</p>
-  </div>
-</section>
+<div style="display:flex;align-items:center;margin-bottom:16px;">
+  <h2 style="margin:0;font-size:16px;display:flex;align-items:center;gap:6px;">
+    环境变更审计
+    <div class="tooltip-wrap">
+      <span class="tooltip-icon">i</span>
+      <div class="tooltip-content" style="white-space:pre-wrap;">由主控面板热切网关，将在这里留下变更快照。<br><br>每次成功的接管都会保留历史配置至回滚集束中。</div>
+    </div>
+  </h2>
+</div>
 
-<section class="table-wrap">
-  <table class="table">
+<section class="table-wrap panel" style="padding:0;border-radius:var(--radius-lg);overflow:hidden;">
+  <table class="table" style="margin:0;border:none;">
     <thead>
       <tr>
-        <th>时间</th>
-        <th>服务类型</th>
-        <th>接管供应商</th>
-        <th>触发动作</th>
-        <th>结果状态</th>
-        <th>事件摘要</th>
-        <th>回滚备份目录</th>
+        <th style="padding-left:20px;">变更时区</th>
+        <th>底层接口</th>
+        <th>挂载点</th>
+        <th>动作</th>
+        <th>状态</th>
+        <th>内容摘要</th>
+        <th style="padding-right:20px;">快照链</th>
       </tr>
     </thead>
     <tbody>
       {{range .Logs}}
       <tr>
-        <td style="white-space: nowrap; color: var(--muted);">{{formatTime .CreatedAt}}</td>
+        <td style="padding-left:20px;white-space:nowrap;color:var(--text-secondary);font-size:12px;">{{formatTime .CreatedAt}}</td>
         <td><span class="pill">{{kindLabel .Kind}}</span></td>
-        <td style="font-weight: 500;">{{.ProviderName}}</td>
-        <td>{{.Action}}</td>
+        <td style="font-weight:600;font-size:12px;">{{.ProviderName}}</td>
+        <td style="font-size:12px;">{{.Action}}</td>
         <td>
           {{if .Success}}
-            <span style="color: var(--ok-text); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">✓ 成功</span>
+            <span style="color:var(--ok-text);font-weight:600;font-size:12px;display:inline-flex;align-items:center;gap:4px;">✓ 接管完成</span>
           {{else}}
-            <span style="color: var(--danger-text); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">✗ 失败</span>
+            <span style="color:var(--danger-text);font-weight:600;font-size:12px;display:inline-flex;align-items:center;gap:4px;">✗ 覆盖失败</span>
           {{end}}
         </td>
-        <td class="pre" style="font-size: 12px; color: var(--text-secondary); max-width: 300px;">{{.Summary}}</td>
-        <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; color: var(--muted);">
+        <td class="pre" style="font-size:10px;color:var(--text);max-width:240px;line-height:1.4;">{{.Summary}}</td>
+        <td style="padding-right:20px;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--muted);max-width:240px;word-break:break-all;">
           {{if .BackupDir}}{{.BackupDir}}{{else}}-{{end}}
         </td>
       </tr>
       {{else}}
       <tr>
-        <td colspan="7" style="text-align: center; padding: 48px; color: var(--muted); border-bottom: none;">
-          暂无下发记录
+        <td colspan="7" style="text-align:center;padding:48px;color:var(--muted);border-bottom:none;font-size:12px;">
+          暂无终端流向日志
         </td>
       </tr>
       {{end}}

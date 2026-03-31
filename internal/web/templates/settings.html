@@ -1,55 +1,79 @@
 {{define "settings.html"}}
-<article class="panel settings-version-panel" style="margin-bottom:24px;">
-  <div class="settings-version-head">
-    <div style="display:flex;align-items:center;gap:16px;">
-      <h2 style="margin:0;">版本与更新</h2>
-      <span style="font-size:15px;font-weight:600;color:var(--text);">{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</span>
-      {{if .Version.UpdateAvailable}}<span class="pill status-neutral">发现新版本 {{.Version.RemoteVersion}}</span>{{end}}
+<article class="panel" style="margin-bottom:24px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+    <div>
+      <h2 style="margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:6px;">
+        版本控制
+        {{if .Version.UpdateAvailable}}<span class="pill status-neutral">新版本 {{.Version.RemoteVersion}}</span>{{end}}
+      </h2>
+      <div class="subtle" style="font-family:ui-monospace,Menlo,monospace;">v{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</div>
     </div>
-    <div class="settings-version-actions">
-      <form method="post" action="/settings/version/check">
-        <button class="button secondary" type="submit">检查更新</button>
-      </form>
-      <form method="post" action="/settings/update" onsubmit="return confirm('一键更新会从 origin/main 拉取代码，并覆盖当前仓库中的未提交修改。确认继续？');">
-        <button class="button" type="submit" {{if not .Version.CanUpdate}}disabled{{end}}>一键更新</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <form method="post" action="/settings/version/check" style="margin:0;"><button class="button secondary" type="submit">查验进度</button></form>
+      <form method="post" action="/settings/update" style="margin:0;" onsubmit="return confirm('警告：热更新将拉取远端 origin/main 的最新结构并强制覆盖工作树。\n\n是否继续？');">
+        <button class="button" type="submit" {{if not .Version.CanUpdate}}disabled{{end}}>执行覆盖更新</button>
       </form>
     </div>
   </div>
-
 </article>
 
 <section class="grid two">
-  <article class="panel">
-    <h2>更新密码</h2>
-    <form method="post" action="/settings/password" class="stack">
-      <label>
-        <span style="font-size: 13px; color: var(--muted);">新密码</span>
-        <input type="password" name="password" autocomplete="new-password" required>
-      </label>
-      <label>
-        <span style="font-size: 13px; color: var(--muted);">确认密码</span>
-        <input type="password" name="confirm_password" autocomplete="new-password" required>
-      </label>
-      <button class="button" type="submit" style="margin-top: 8px;">更新密码</button>
-    </form>
+  <article class="panel" style="margin-bottom:0;display:flex;flex-direction:column;gap:32px;">
+    <div>
+      <h2 style="font-size:14px;display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+        接口鉴权凭证
+        <div class="tooltip-wrap bottom-left"><span class="tooltip-icon">i</span><div class="tooltip-content">自动化脚本请求时需在 Header 中携带 `Bearer [Token]`，用于无头环境。配置初始位置：<code>{{.BootstrapPath}}</code></div></div>
+      </h2>
+      <form method="post" action="/settings/token">
+        <button class="button secondary small" type="submit">重置网关 Token</button>
+      </form>
+      {{if .GeneratedToken}}
+      <div class="token-box" style="margin-top:16px;padding:12px;background:var(--ok);border:1px solid var(--ok-text);border-radius:var(--radius-md);">
+        <strong style="display:block;margin-bottom:4px;color:var(--ok-text);font-size:12px;">已重新签发</strong>
+        <code style="display:block;padding:8px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);user-select:all;color:var(--text);">{{.GeneratedToken}}</code>
+        <div class="muted" style="margin-top:8px;">关闭页面后不再显示</div>
+      </div>
+      {{end}}
+    </div>
+
+    <div style="padding-top:32px;border-top:1px solid var(--border);">
+      <h2 style="font-size:14px;margin-bottom:12px;">WebUI 访问密码</h2>
+      <form method="post" action="/settings/password" class="stack" style="gap:16px;">
+        <label>
+          <span class="muted" style="font-weight:600;">更新密令</span>
+          <input type="password" name="password" autocomplete="new-password" required>
+        </label>
+        <label>
+          <span class="muted" style="font-weight:600;">验证密令</span>
+          <input type="password" name="confirm_password" autocomplete="new-password" required>
+        </label>
+        <div style="margin-top:4px;"><button class="button small" type="submit">保存新印记</button></div>
+      </form>
+    </div>
   </article>
 
-  <article class="panel">
-    <h2>API Token</h2>
-    <p class="subtle" style="margin-bottom: 20px;">Bearer Token 可用于无头环境、自动化脚本或反向代理之后的 API 发起者调用。</p>
-    <form method="post" action="/settings/token">
-      <button class="button secondary" type="submit">重新生成 Token</button>
+  <article class="panel" style="margin-bottom:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:16px;">
+      <div>
+        <h2 style="margin:0;font-size:14px;display:flex;align-items:center;gap:6px;">
+          数据同步与迁移
+          <div class="tooltip-wrap bottom-right"><span class="tooltip-icon">i</span><div class="tooltip-content">支持导出本地 JSON 树。合并时优先匹配主干 ID 冲突，回落按类别与名称覆盖。请注意明文包含密钥！</div></div>
+        </h2>
+      </div>
+      <a class="button secondary small" href="/providers/export">↓ 导出 JSON</a>
+    </div>
+
+    <form method="post" action="/providers/import" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:20px;">
+      <label>
+        <span class="muted" style="font-weight:600;display:block;margin-bottom:2px;">选择种子 JSON</span>
+        <input type="file" name="file" accept=".json,application/json" required style="padding:4px;">
+      </label>
+      <label class="checkbox-card" style="padding:10px 12px;cursor:pointer;">
+        <input type="checkbox" name="restore_active" checked>
+        <span class="muted" style="font-size:13px;color:var(--text);">导入时强制接管游离的活跃引用</span>
+      </label>
+      <div style="margin-top:8px;"><button class="button" type="submit">解析并写入</button></div>
     </form>
-    {{if .GeneratedToken}}
-    <div class="token-box">
-      <strong>新生成 Token</strong>
-      <code>{{.GeneratedToken}}</code>
-      <p class="subtle" style="margin-top: 8px;">请立即复制并保存此内容，它将不会再次显示。</p>
-    </div>
-    {{end}}
-    <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
-      <p class="muted" style="margin: 0;">首次启动生成的凭据文件：<br><code style="display: block; margin-top: 4px;">{{.BootstrapPath}}</code></p>
-    </div>
   </article>
 </section>
 {{end}}

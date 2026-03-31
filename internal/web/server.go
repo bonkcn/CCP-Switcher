@@ -75,16 +75,17 @@ type providerProbeView struct {
 
 func NewServer(cfg app.Config, st *store.Store, manager *runtimecfg.Manager, logger *log.Logger) (*Server, error) {
 	tmpl, err := template.New("layout.html").Funcs(template.FuncMap{
-		"maskSecret":    maskSecret,
-		"formatTime":    formatTime,
-		"isActive":      isActive,
-		"kindLabel":     kindLabel,
-		"optionalLabel": optionalLabel,
-		"statusClass":   statusClass,
-		"firstLine":     firstLine,
-		"hasMoreText":   hasMoreText,
-		"truncateText":  truncateText,
-		"providerCount": providerCount,
+		"maskSecret":      maskSecret,
+		"formatTime":      formatTime,
+		"isActive":        isActive,
+		"kindLabel":       kindLabel,
+		"optionalLabel":   optionalLabel,
+		"statusClass":     statusClass,
+		"testStatusLabel": testStatusLabel,
+		"firstLine":       firstLine,
+		"hasMoreText":     hasMoreText,
+		"truncateText":    truncateText,
+		"providerCount":   providerCount,
 	}).ParseFS(assets, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
@@ -111,9 +112,11 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /logout", s.authenticated(s.handleLogout))
 	mux.HandleFunc("GET /", s.authenticated(s.handleDashboard))
 	mux.HandleFunc("GET /providers", s.authenticated(s.handleProviders))
+	mux.HandleFunc("GET /providers/export", s.authenticated(s.handleProvidersExport))
 	mux.HandleFunc("GET /providers/{id}/probe", s.authenticated(s.handleProviderProbe))
 	mux.HandleFunc("GET /providers/new", s.authenticated(s.handleProviderNew))
 	mux.HandleFunc("POST /providers", s.authenticated(s.handleProviderCreate))
+	mux.HandleFunc("POST /providers/import", s.authenticated(s.handleProvidersImport))
 	mux.HandleFunc("GET /providers/{id}/edit", s.authenticated(s.handleProviderEdit))
 	mux.HandleFunc("POST /providers/{id}", s.authenticated(s.handleProviderUpdate))
 	mux.HandleFunc("POST /providers/{id}/delete", s.authenticated(s.handleProviderDelete))
@@ -706,7 +709,7 @@ func providerFromRequest(r *http.Request, existing store.Provider) (store.Provid
 	provider := existing
 	provider.Kind = strings.TrimSpace(r.FormValue("kind"))
 	provider.Name = strings.TrimSpace(r.FormValue("name"))
-	provider.BaseURL = normalizeBaseURL(r.FormValue("base_url"))
+	provider.BaseURL = r.FormValue("base_url")
 	if secret := strings.TrimSpace(r.FormValue("secret")); secret != "" {
 		provider.Secret = secret
 	}
@@ -720,31 +723,7 @@ func providerFromRequest(r *http.Request, existing store.Provider) (store.Provid
 	}
 	provider.ClaudeUseSandbox = r.FormValue("claude_use_sandbox") == "on"
 	provider.ClaudeSkipDangerousPrompt = r.FormValue("claude_skip_dangerous_prompt") == "on"
-
-	if provider.Kind != "claude" && provider.Kind != "codex" {
-		return provider, fmt.Errorf("provider kind must be claude or codex")
-	}
-	if provider.Kind == "codex" {
-		if !isAllowedValue(provider.CodexApprovalPolicy, "", "untrusted", "on-failure", "on-request", "never") {
-			return provider, fmt.Errorf("invalid approval policy")
-		}
-		if !isAllowedValue(provider.CodexSandboxMode, "", "read-only", "workspace-write", "danger-full-access") {
-			return provider, fmt.Errorf("invalid sandbox mode")
-		}
-	} else {
-		provider.CodexApprovalPolicy = ""
-		provider.CodexSandboxMode = ""
-	}
-	if provider.Name == "" {
-		return provider, fmt.Errorf("provider name is required")
-	}
-	if provider.BaseURL == "" {
-		return provider, fmt.Errorf("base URL is required")
-	}
-	if provider.Secret == "" {
-		return provider, fmt.Errorf("API key or token is required")
-	}
-	return provider, nil
+	return normalizeProviderInput(provider)
 }
 
 func parseID(raw string) (int64, error) {
@@ -814,6 +793,20 @@ func statusClass(status string) string {
 		return "status-error"
 	default:
 		return "status-neutral"
+	}
+}
+
+func testStatusLabel(status string, message string) string {
+	if strings.TrimSpace(message) == "" {
+		return "未执行"
+	}
+	switch status {
+	case "ok":
+		return "通过"
+	case "error":
+		return "失败"
+	default:
+		return "已测试"
 	}
 }
 
