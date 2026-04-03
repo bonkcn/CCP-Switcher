@@ -1,0 +1,110 @@
+{{define "sync.html"}}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+  <h2 style="margin:0;font-size:16px;display:flex;align-items:center;gap:6px;">
+    云端数据同步
+    <div class="tooltip-wrap bottom-left">
+      <span class="tooltip-icon">i</span>
+      <div class="tooltip-content">将供应商配置同步到 WebDAV 或 S3 兼容存储，支持多设备间共享。数据包含明文密钥，请确保远端存储安全。</div>
+    </div>
+  </h2>
+  {{if or (not .SyncStatus.LastPushAt.IsZero) (not .SyncStatus.LastPullAt.IsZero)}}
+  <div style="display:flex;gap:16px;font-size:12px;">
+    {{if not .SyncStatus.LastPushAt.IsZero}}<span style="color:var(--text-secondary);">上次推送: <strong style="color:var(--text);">{{formatTime .SyncStatus.LastPushAt}}</strong></span>{{end}}
+    {{if not .SyncStatus.LastPullAt.IsZero}}<span style="color:var(--text-secondary);">上次拉取: <strong style="color:var(--text);">{{formatTime .SyncStatus.LastPullAt}}</strong></span>{{end}}
+  </div>
+  {{end}}
+</div>
+
+<article class="panel" style="max-width:840px;">
+  {{if .SyncStatus.LastError}}<div class="error" style="margin-bottom:20px;">{{.SyncStatus.LastError}}</div>{{end}}
+
+  <form method="post" action="/sync/save" style="display:flex;flex-direction:column;gap:20px;">
+    
+    <!-- 基础配置区 -->
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:start;">
+      <label style="display:flex;flex-direction:column;gap:8px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">存储后端类型</span>
+        <select name="sync_type">
+          <option value="disabled" {{if or (eq .SyncConfig.Type "") (eq .SyncConfig.Type "disabled")}}selected{{end}}>关闭 (Local Only)</option>
+          <option value="webdav" {{if eq .SyncConfig.Type "webdav"}}selected{{end}}>WebDAV (标准协议)</option>
+          <option value="s3" {{if eq .SyncConfig.Type "s3"}}selected{{end}}>S3 (AWS / R2 / MinIO)</option>
+        </select>
+      </label>
+
+      <label style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">远端服务器 Endpoint URL</span>
+          <div class="tooltip-wrap bottom-right"><span class="tooltip-icon">i</span><div class="tooltip-content">WebDAV 填根地址如 https://dav.example.com<br>S3 填如 https://&lt;id&gt;.r2.cloudflarestorage.com</div></div>
+        </div>
+        <input type="url" name="sync_url" value="{{.SyncConfig.URL}}" placeholder="https://..." style="font-family:ui-monospace,monospace;">
+      </label>
+    </div>
+
+    <!-- 详细配置区 -->
+    <div style="padding-top:16px;border-top:1px dashed var(--border);">
+      <h3 style="margin:0 0 16px;font-size:13px;">存储桶与路径策略</h3>
+      <div class="form-grid two">
+        <label>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">远端文件挂载路径</span>
+            <div class="tooltip-wrap"><span class="tooltip-icon">i</span><div class="tooltip-content">云端的存储位置。</div></div>
+          </div>
+          <input type="text" name="sync_path" value="{{.SyncConfig.Path}}" placeholder="/ccp-switcher/providers.json" style="font-family:ui-monospace,monospace;">
+        </label>
+
+        <label>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">Bucket / Region (仅 S3)</span>
+            <div class="tooltip-wrap"><span class="tooltip-icon">i</span><div class="tooltip-content">Cloudflare R2 的 Region 请填 auto。</div></div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" name="sync_bucket" value="{{.SyncConfig.Bucket}}" placeholder="bucket-name" style="flex:1;">
+            <input type="text" name="sync_region" value="{{.SyncConfig.Region}}" placeholder="eu-west-1" style="flex:1;max-width:120px;">
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- 鉴权区 -->
+    <div style="padding-top:16px;border-top:1px dashed var(--border);">
+      <h3 style="margin:0 0 16px;font-size:13px;">身份验证凭据 (Credentials)</h3>
+      <div class="form-grid two">
+        <label>
+          <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">用户名 / Access Key ID</span>
+          <input type="text" name="sync_key_id" value="{{.SyncConfig.KeyID}}" placeholder="例如 AKIAIOSFODNN7EXAMPLE">
+        </label>
+        <label>
+          <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">密码 / Secret Access Key</span>
+          <input type="password" name="sync_secret" placeholder="{{if .SyncConfig.Secret}}•••••••• (已配置，留空不修改){{else}}输入您的密钥{{end}}">
+        </label>
+      </div>
+    </div>
+
+    <div style="padding-top:16px;border-top:1px dashed var(--border);display:flex;gap:32px;align-items:center;">
+      <label style="display:flex;flex-direction:row;align-items:center;gap:6px;font-weight:normal;font-size:13px;cursor:pointer;">
+        <input type="checkbox" name="sync_auto" {{if .SyncConfig.Auto}}checked{{end}}>
+        <span>激活后台自动推送</span>
+      </label>
+      <label style="display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:normal;font-size:13px;">
+        <span style="color:var(--text-secondary);">自动同步间隔时长</span>
+        <div style="display:flex;align-items:center;background:var(--bg-accent);border:1px solid var(--border-strong);border-radius:var(--radius-sm);overflow:hidden;box-shadow:var(--shadow-inset-highlight);">
+          <input type="number" name="sync_interval" value="{{.SyncConfig.Interval}}" min="1" max="1440" placeholder="30" style="width:64px;border:none;border-radius:0;box-shadow:none;padding:6px 8px;text-align:right;">
+          <span style="padding:6px 10px;background:var(--border);font-size:12px;color:var(--text-secondary);border-left:1px solid var(--border-strong);">分钟</span>
+        </div>
+      </label>
+    </div>
+
+    <!-- 底部动作条 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:20px;margin-top:4px;border-top:1px solid var(--border);">
+      <div style="display:flex;gap:8px;">
+        <button class="button" type="submit" formaction="/sync/test">保存并测试连通性</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="button secondary" type="submit" formaction="/sync/pull">↓ 从云端拉取覆盖</button>
+        <button class="button secondary" type="submit" formaction="/sync/push">↑ 强制推送至云端</button>
+      </div>
+    </div>
+
+  </form>
+</article>
+{{end}}

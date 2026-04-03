@@ -48,6 +48,8 @@ func main() {
 		logger.Fatalf("create server: %v", err)
 	}
 
+	server.StartAutoSync()
+
 	logger.Printf("listening on http://%s", cfg.ListenAddr)
 	if err := http.ListenAndServe(cfg.ListenAddr, server.Routes()); err != nil {
 		logger.Fatalf("http server stopped: %v", err)

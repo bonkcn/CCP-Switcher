@@ -2,8 +2,10 @@ package web
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -17,6 +19,7 @@ import (
 	"github.com/bonkcn/ccp-switcher/internal/app"
 	runtimecfg "github.com/bonkcn/ccp-switcher/internal/runtime"
 	"github.com/bonkcn/ccp-switcher/internal/store"
+	cloudsync "github.com/bonkcn/ccp-switcher/internal/sync"
 )
 
 const sessionCookieName = "ccp_switcher_session"
@@ -32,10 +35,13 @@ type Server struct {
 	logger   *log.Logger
 	tmpl     *template.Template
 	repoDir  string
+
+	syncStop chan struct{} // closed to stop auto-sync goroutine
 }
 
 type viewData struct {
 	Title           string
+	SiteName        string
 	CurrentPath     string
 	ContentTemplate string
 	Content         template.HTML
@@ -59,6 +65,8 @@ type viewData struct {
 	CodexAuthPath   string
 	Probe           *providerProbeView
 	Version         *versionStatusView
+	SyncConfig      cloudsync.Config
+	SyncStatus      cloudsync.SyncStatus
 }
 
 type providerProbeView struct {
@@ -129,7 +137,16 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /settings/token", s.authenticated(s.handleTokenRotate))
 	mux.HandleFunc("POST /settings/version/check", s.authenticated(s.handleVersionCheck))
 	mux.HandleFunc("POST /settings/update", s.authenticated(s.handleSelfUpdate))
-	mux.HandleFunc("GET /history", s.authenticated(s.handleHistory))
+	mux.HandleFunc("POST /settings/site_name", s.authenticated(s.handleSiteNameUpdate))
+	mux.HandleFunc("GET /settings/export/providers", s.authenticated(s.handleProvidersExport))
+	mux.HandleFunc("GET /settings/export/full", s.authenticated(s.handleFullExport))
+	mux.HandleFunc("POST /settings/import/providers", s.authenticated(s.handleProvidersImportSettings))
+	mux.HandleFunc("POST /settings/import/full", s.authenticated(s.handleFullImport))
+	mux.HandleFunc("GET /sync", s.authenticated(s.handleSyncPage))
+	mux.HandleFunc("POST /sync/save", s.authenticated(s.handleSyncSave))
+	mux.HandleFunc("POST /sync/test", s.authenticated(s.handleSyncTest))
+	mux.HandleFunc("POST /sync/push", s.authenticated(s.handleSyncPush))
+	mux.HandleFunc("POST /sync/pull", s.authenticated(s.handleSyncPull))
 	return mux
 }
 
@@ -350,10 +367,24 @@ func (s *Server) handleProviderDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTestConnectivity(w http.ResponseWriter, r *http.Request) {
 	provider, result, err := s.runtime.TestConnectivity(mustID(r.PathValue("id")))
 	if err != nil {
+		if wantsJSON(r) {
+			s.writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "message": err.Error()})
+			return
+		}
 		s.redirectWithMessage(w, r, "/providers", "", err.Error())
 		return
 	}
 	_ = s.store.RecordTestResult(provider.ID, result.Status, result.Message)
+	if wantsJSON(r) {
+		s.writeJSON(w, http.StatusOK, map[string]any{
+			"ok":          true,
+			"provider_id": provider.ID,
+			"message":     provider.Name + " 连通性测试 (Ping) 完成",
+			"test_status": result.Status,
+			"test_label":  testStatusLabel(result.Status, result.Message),
+		})
+		return
+	}
 	s.redirectWithMessage(w, r, "/providers", provider.Name+" 连通性测试 (Ping) 完成", "")
 }
 
@@ -478,7 +509,20 @@ func (s *Server) handleTestCall(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSwitchProvider(w http.ResponseWriter, r *http.Request) {
 	provider, backupDir, err := s.runtime.SwitchProvider(mustID(r.PathValue("id")))
 	if err != nil {
+		if wantsJSON(r) {
+			s.writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "message": err.Error()})
+			return
+		}
 		s.redirectWithMessage(w, r, "/providers", "", err.Error())
+		return
+	}
+	if wantsJSON(r) {
+		s.writeJSON(w, http.StatusOK, map[string]any{
+			"ok":          true,
+			"provider_id": provider.ID,
+			"kind":        provider.Kind,
+			"message":     provider.Name + " 切换成功，旧配置已备份至: " + backupDir,
+		})
 		return
 	}
 	s.redirectWithMessage(w, r, "/providers", provider.Name+" 切换成功，旧配置已备份至: "+backupDir, "")
@@ -486,6 +530,211 @@ func (s *Server) handleSwitchProvider(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	s.renderSettingsPage(w, http.StatusOK, r.URL.Query().Get("notice"), r.URL.Query().Get("error"), "", false)
+}
+
+func (s *Server) handleSyncPage(w http.ResponseWriter, r *http.Request) {
+	syncCfg, _ := cloudsync.LoadConfig(s.store)
+	syncStatus, _ := cloudsync.LoadStatus(s.store)
+	s.render(w, http.StatusOK, viewData{
+		Title:           "云同步",
+		CurrentPath:     "/sync",
+		ContentTemplate: "sync.html",
+		Notice:          r.URL.Query().Get("notice"),
+		Error:           r.URL.Query().Get("error"),
+		SyncConfig:      syncCfg,
+		SyncStatus:      syncStatus,
+	})
+}
+
+func (s *Server) handleProvidersImportSettings(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxProviderImportBytes)
+	if err := r.ParseMultipartForm(maxProviderImportBytes); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", providerImportFormError(err))
+		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "请选择要导入的 JSON 文件")
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "读取导入文件失败: "+err.Error())
+		return
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		s.redirectWithMessage(w, r, "/settings", "", "导入文件不能为空")
+		return
+	}
+
+	payload, err := decodeProviderTransfer(data)
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", err.Error())
+		return
+	}
+
+	result, err := s.importProviderTransfer(payload, r.FormValue("restore_active") == "on")
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", err.Error())
+		return
+	}
+	s.redirectWithMessage(w, r, "/settings", result.summary(), "")
+}
+
+func (s *Server) handleFullExport(w http.ResponseWriter, r *http.Request) {
+	providers, err := s.store.ListProviders("")
+	if err != nil {
+		s.renderError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	activeIDs, err := s.store.ListActiveProviderIDs()
+	if err != nil {
+		s.renderError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	syncCfg, _ := cloudsync.LoadConfig(s.store)
+	siteName, _ := s.store.GetSetting("site_name")
+
+	providerPayload := buildProviderTransferFile(providers, activeIDs)
+
+	fullPayload := map[string]any{
+		"type":        "ccp-switcher/full",
+		"version":     1,
+		"exported_at": time.Now().UTC().Format(time.RFC3339),
+		"providers":   providerPayload,
+		"sync_config": map[string]any{
+			"type":     syncCfg.Type,
+			"url":      syncCfg.URL,
+			"bucket":   syncCfg.Bucket,
+			"region":   syncCfg.Region,
+			"key_id":   syncCfg.KeyID,
+			"path":     syncCfg.Path,
+			"auto":     syncCfg.Auto,
+			"interval": syncCfg.Interval,
+		},
+		"site_settings": map[string]any{
+			"site_name": siteName,
+		},
+	}
+
+	data, err := json.MarshalIndent(fullPayload, "", "  ")
+	if err != nil {
+		s.renderError(w, http.StatusInternalServerError, "导出 JSON 失败")
+		return
+	}
+
+	filename := fmt.Sprintf("ccp-switcher-full-%s.json", time.Now().UTC().Format("20060102T150405Z"))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+func (s *Server) handleFullImport(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxProviderImportBytes)
+	if err := r.ParseMultipartForm(maxProviderImportBytes); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", providerImportFormError(err))
+		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "请选择要导入的 JSON 文件")
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "读取导入文件失败: "+err.Error())
+		return
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		s.redirectWithMessage(w, r, "/settings", "", "导入文件不能为空")
+		return
+	}
+
+	var fullPayload map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fullPayload); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "导入文件不是合法 JSON: "+err.Error())
+		return
+	}
+
+	var messages []string
+
+	// Import providers
+	if raw, ok := fullPayload["providers"]; ok {
+		var providerPayload providerTransferFile
+		if err := json.Unmarshal(raw, &providerPayload); err == nil {
+			if err := validateProviderTransfer(&providerPayload); err == nil {
+				result, err := s.importProviderTransfer(providerPayload, r.FormValue("restore_active") == "on")
+				if err != nil {
+					messages = append(messages, "供应商导入异常: "+err.Error())
+				} else {
+					messages = append(messages, result.summary())
+				}
+			}
+		}
+	}
+
+	// Import sync config
+	if raw, ok := fullPayload["sync_config"]; ok {
+		var syncMap map[string]any
+		if err := json.Unmarshal(raw, &syncMap); err == nil {
+			cfg := cloudsync.Config{
+				Type:   stringFromMap(syncMap, "type"),
+				URL:    stringFromMap(syncMap, "url"),
+				Bucket: stringFromMap(syncMap, "bucket"),
+				Region: stringFromMap(syncMap, "region"),
+				KeyID:  stringFromMap(syncMap, "key_id"),
+				Path:   stringFromMap(syncMap, "path"),
+			}
+			if v, ok := syncMap["auto"]; ok {
+				if b, ok := v.(bool); ok {
+					cfg.Auto = b
+				}
+			}
+			if v, ok := syncMap["interval"]; ok {
+				if f, ok := v.(float64); ok {
+					cfg.Interval = int(f)
+				}
+			}
+			if cfg.Interval <= 0 {
+				cfg.Interval = 30
+			}
+			existing, _ := cloudsync.LoadConfig(s.store)
+			cfg.Secret = existing.Secret
+			if err := cloudsync.SaveConfig(s.store, cfg); err == nil {
+				s.restartAutoSync()
+				messages = append(messages, "云同步配置已恢复")
+			}
+		}
+	}
+
+	// Import site settings
+	if raw, ok := fullPayload["site_settings"]; ok {
+		var siteMap map[string]any
+		if err := json.Unmarshal(raw, &siteMap); err == nil {
+			if name := stringFromMap(siteMap, "site_name"); name != "" {
+				_ = s.store.SetSetting("site_name", name)
+				messages = append(messages, "站点设置已恢复")
+			}
+		}
+	}
+
+	if len(messages) == 0 {
+		messages = append(messages, "导入完成，文件中没有可识别的数据")
+	}
+	s.redirectWithMessage(w, r, "/settings", strings.Join(messages, "；"), "")
 }
 
 func (s *Server) handlePasswordUpdate(w http.ResponseWriter, r *http.Request) {
@@ -513,6 +762,23 @@ func (s *Server) handleTokenRotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderSettingsPage(w, http.StatusOK, "API Token 已轮换重置。请立即复制，刷新后将不再显示。", "", token, false)
+}
+
+func (s *Server) handleSiteNameUpdate(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("site_name"))
+	if err := s.store.SetSetting("site_name", name); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "保存站点名称失败: "+err.Error())
+		return
+	}
+	s.redirectWithMessage(w, r, "/settings", "站点名称已更新", "")
+}
+
+func (s *Server) siteName() string {
+	name, _ := s.store.GetSetting("site_name")
+	if name == "" {
+		return "CCP Switcher"
+	}
+	return name
 }
 
 func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
@@ -559,6 +825,7 @@ func (s *Server) renderSettingsPage(w http.ResponseWriter, status int, notice st
 func (s *Server) settingsViewData(notice string, errorMessage string, generatedToken string, checkRemote bool) viewData {
 	return viewData{
 		Title:           "Settings",
+		SiteName:        s.siteName(),
 		CurrentPath:     "/settings",
 		ContentTemplate: "settings.html",
 		Notice:          notice,
@@ -638,6 +905,9 @@ func (s *Server) isAuthenticated(r *http.Request) bool {
 }
 
 func (s *Server) render(w http.ResponseWriter, status int, data viewData) {
+	if data.SiteName == "" {
+		data.SiteName = s.siteName()
+	}
 	var body strings.Builder
 	if data.ContentTemplate != "" {
 		if err := s.tmpl.ExecuteTemplate(&body, data.ContentTemplate, data); err != nil {
@@ -943,10 +1213,30 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func stringFromMap(m map[string]any, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
 func mustSubFS(path string) fs.FS {
 	sub, err := fsSub(path)
 	if err != nil {
 		panic(err)
 	}
 	return sub
+}
+
+func wantsJSON(r *http.Request) bool {
+	return r.Header.Get("X-Requested-With") == "XMLHttpRequest" ||
+		strings.Contains(r.Header.Get("Accept"), "application/json")
+}
+
+func (s *Server) writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
 }

@@ -1,79 +1,103 @@
 {{define "settings.html"}}
-<article class="panel" style="margin-bottom:24px;">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
-    <div>
-      <h2 style="margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:6px;">
-        版本控制
-        {{if .Version.UpdateAvailable}}<span class="pill status-neutral">新版本 {{.Version.RemoteVersion}}</span>{{end}}
-      </h2>
-      <div class="subtle" style="font-family:ui-monospace,Menlo,monospace;">{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知版本{{end}}</div>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <form method="post" action="/settings/version/check" style="margin:0;"><button class="button secondary" type="submit">查验进度</button></form>
-      <form method="post" action="/settings/update" style="margin:0;" onsubmit="return confirm('警告：热更新将拉取远端 origin/main 的最新结构并强制覆盖工作树。\n\n是否继续？');">
-        <button class="button" type="submit" {{if not .Version.CanUpdate}}disabled{{end}}>执行覆盖更新</button>
-      </form>
-    </div>
-  </div>
-</article>
+<section class="grid two" style="margin-bottom:24px;">
+  <article class="panel" style="margin-bottom:0;">
+    <h2 style="font-size:14px;margin-bottom:16px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);padding-bottom:12px;">系统核心配置</h2>
+    
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      
+      <!-- 站点与版本 -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <span style="font-size:13px;font-weight:600;">程序版本</span>
+            <span class="muted" style="margin-left:8px;font-family:ui-monospace,monospace;">{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</span>
+            {{if .Version.UpdateAvailable}}<span class="pill status-neutral" style="margin-left:4px;transform:scale(0.9);">新版本 {{.Version.RemoteVersion}}</span>{{end}}
+          </div>
+          <div style="display:flex;gap:4px;">
+            <form method="post" action="/settings/version/check" style="margin:0;"><button class="button secondary small" type="submit">查验</button></form>
+            <form method="post" action="/settings/update" style="margin:0;" onsubmit="return confirm('确认强制热更新并覆盖代码？');">
+              <button class="button small" type="submit" {{if not .Version.CanUpdate}}disabled{{end}}>更新</button>
+            </form>
+          </div>
+        </div>
 
-<section class="grid two">
-  <article class="panel" style="margin-bottom:0;display:flex;flex-direction:column;gap:32px;">
-    <div>
-      <h2 style="font-size:14px;display:flex;align-items:center;gap:6px;margin-bottom:12px;">
-        接口鉴权凭证
-        <div class="tooltip-wrap bottom-left"><span class="tooltip-icon">i</span><div class="tooltip-content">自动化脚本请求时需在 Header 中携带 `Bearer [Token]`，用于无头环境。配置初始位置：<code>{{.BootstrapPath}}</code></div></div>
-      </h2>
-      <form method="post" action="/settings/token">
-        <button class="button secondary small" type="submit">重置网关 Token</button>
-      </form>
-      {{if .GeneratedToken}}
-      <div class="token-box" style="margin-top:16px;padding:12px;background:var(--ok);border:1px solid var(--ok-text);border-radius:var(--radius-md);">
-        <strong style="display:block;margin-bottom:4px;color:var(--ok-text);font-size:12px;">已重新签发</strong>
-        <code style="display:block;padding:8px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);user-select:all;color:var(--text);">{{.GeneratedToken}}</code>
-        <div class="muted" style="margin-top:8px;">关闭页面后不再显示</div>
+        <form method="post" action="/settings/site_name" style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;font-weight:600;white-space:nowrap;width:56px;">站点名称</span>
+          <input type="text" name="site_name" value="{{.SiteName}}" placeholder="CCP Switcher" style="padding:6px 10px;flex:1;">
+          <button class="button secondary small" type="submit">保存</button>
+        </form>
       </div>
-      {{end}}
-    </div>
 
-    <div style="padding-top:32px;border-top:1px solid var(--border);">
-      <h2 style="font-size:14px;margin-bottom:12px;">WebUI 访问密码</h2>
-      <form method="post" action="/settings/password" class="stack" style="gap:16px;">
-        <label>
-          <span class="muted" style="font-weight:600;">更新密令</span>
-          <input type="password" name="password" autocomplete="new-password" required>
-        </label>
-        <label>
-          <span class="muted" style="font-weight:600;">验证密令</span>
-          <input type="password" name="confirm_password" autocomplete="new-password" required>
-        </label>
-        <div style="margin-top:4px;"><button class="button small" type="submit">保存新印记</button></div>
-      </form>
+      <div style="height:1px;background:var(--border);"></div>
+
+      <!-- 访问与授权 -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:600;">接口鉴证 (API Token)</span>
+            <form method="post" action="/settings/token" style="margin:0;"><button class="button secondary small" type="submit">重置签发</button></form>
+          </div>
+          {{if .GeneratedToken}}
+          <div style="padding:8px 10px;background:var(--ok);border-radius:var(--radius-sm);color:var(--ok-text);font-size:12px;display:flex;align-items:center;gap:8px;">
+            <strong>已刷新:</strong> <code style="padding:2px 4px;background:var(--panel);">{{.GeneratedToken}}</code>
+          </div>
+          {{else}}
+          <div class="muted" style="font-size:11px;">脚本 Header 携带 `Bearer [Token]`。凭证保存在: <code>{{.BootstrapPath}}</code></div>
+          {{end}}
+        </div>
+
+        <form method="post" action="/settings/password" style="display:flex;flex-direction:column;gap:8px;">
+          <span style="font-size:13px;font-weight:600;">WebUI 访问密码</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="password" name="password" autocomplete="new-password" placeholder="输入新密码" required style="padding:6px 10px;flex:1;">
+            <input type="password" name="confirm_password" autocomplete="new-password" placeholder="再次确认" required style="padding:6px 10px;flex:1;">
+            <button class="button small" type="submit">修改</button>
+          </div>
+        </form>
+      </div>
+      
     </div>
   </article>
 
   <article class="panel" style="margin-bottom:0;">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:16px;">
-      <div>
-        <h2 style="margin:0;font-size:14px;display:flex;align-items:center;gap:6px;">
-          数据同步与迁移
-          <div class="tooltip-wrap bottom-right"><span class="tooltip-icon">i</span><div class="tooltip-content">支持导出本地 JSON 树。合并时优先匹配主干 ID 冲突，回落按类别与名称覆盖。请注意明文包含密钥！</div></div>
-        </h2>
-      </div>
-      <a class="button secondary small" href="/providers/export">↓ 导出 JSON</a>
-    </div>
+    <h2 style="font-size:14px;margin-bottom:16px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--border);padding-bottom:12px;">
+      数据导入与导出
+      <div class="tooltip-wrap bottom-right"><span class="tooltip-icon">i</span><div class="tooltip-content">全站数据包含供应商、云同步和站点配置。注意包含明文密钥！</div></div>
+    </h2>
 
-    <form method="post" action="/providers/import" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:20px;">
-      <label>
-        <span class="muted" style="font-weight:600;display:block;margin-bottom:2px;">选择种子 JSON</span>
-        <input type="file" name="file" accept=".json,application/json" required style="padding:4px;">
-      </label>
-      <label class="checkbox-card" style="padding:10px 12px;cursor:pointer;">
-        <input type="checkbox" name="restore_active" checked>
-        <span class="muted" style="font-size:13px;color:var(--text);">导入时强制接管游离的活跃引用</span>
-      </label>
-      <div style="margin-top:8px;"><button class="button" type="submit">解析并写入</button></div>
-    </form>
+    <div style="display:flex;flex-direction:column;gap:24px;">
+      
+      <!-- 供应商数据 -->
+      <div style="background:var(--bg-accent);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-weight:600;font-size:13px;color:var(--text);">供应商配置数据</span>
+          <a class="button secondary small" href="/settings/export/providers">↓ 导出 JSON</a>
+        </div>
+        <form method="post" action="/settings/import/providers" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px;">
+          <input type="file" name="file" accept=".json,application/json" required style="border:none;box-shadow:none;padding:0;font-size:12px;background:transparent;flex:1;min-width:0;">
+          <label style="display:flex;flex-direction:row;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);cursor:pointer;margin:0 4px;font-weight:normal;">
+            <input type="checkbox" name="restore_active" checked style="margin:0;transform:scale(0.8);"> 同步生效引用
+          </label>
+          <button class="button small" type="submit" style="white-space:nowrap;">↑ 导入</button>
+        </form>
+      </div>
+
+      <!-- 全站数据 -->
+      <div style="background:var(--bg-accent);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-weight:600;font-size:13px;color:var(--text);">全站备份数据</span>
+          <a class="button secondary small" href="/settings/export/full">↓ 导出全部</a>
+        </div>
+        <form method="post" action="/settings/import/full" enctype="multipart/form-data" style="display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px;">
+          <input type="file" name="file" accept=".json,application/json" required style="border:none;box-shadow:none;padding:0;font-size:12px;background:transparent;flex:1;min-width:0;">
+          <label style="display:flex;flex-direction:row;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);cursor:pointer;margin:0 4px;font-weight:normal;">
+            <input type="checkbox" name="restore_active" checked style="margin:0;transform:scale(0.8);"> 同步生效引用
+          </label>
+          <button class="button small" type="submit" style="white-space:nowrap;">↑ 导入全部</button>
+        </form>
+      </div>
+      
+    </div>
   </article>
 </section>
 {{end}}

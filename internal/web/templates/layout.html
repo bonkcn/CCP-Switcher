@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Title}} | CCP Switcher</title>
+  <title>{{.Title}} | {{if .SiteName}}{{.SiteName}}{{else}}CCP Switcher{{end}}</title>
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -17,20 +17,19 @@
   <div class="shell">
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark"><img src="/static/icon.svg" alt="CCP Switcher"></span>
-        <span class="brand-text">CCP Switcher</span>
+        <span class="brand-mark"><img src="/static/icon.svg" alt="{{if .SiteName}}{{.SiteName}}{{else}}CCP Switcher{{end}}"></span>
+        <span class="brand-text">{{if .SiteName}}{{.SiteName}}{{else}}CCP Switcher{{end}}</span>
       </div>
+      <nav class="nav">
+        <a class="{{if eq .CurrentPath "/"}}active{{end}}" href="/">概览</a>
+        <a class="{{if eq .CurrentPath "/providers"}}active{{end}}" href="/providers" onclick="sessionStorage.removeItem('ccp_provider_tab')">供应商</a>
+        <a class="{{if eq .CurrentPath "/sync"}}active{{end}}" href="/sync">云同步</a>
+        <a class="{{if eq .CurrentPath "/settings"}}active{{end}}" href="/settings">设置</a>
+      </nav>
       <form method="post" action="/logout" style="margin:0;">
         <button class="button ghost" type="submit">退出账号</button>
       </form>
     </header>
-
-    <nav class="nav">
-      <a class="{{if eq .CurrentPath "/"}}active{{end}}" href="/">概览</a>
-      <a class="{{if eq .CurrentPath "/providers"}}active{{end}}" href="/providers">供应商</a>
-      <a class="{{if eq .CurrentPath "/history"}}active{{end}}" href="/history">历史</a>
-      <a class="{{if eq .CurrentPath "/settings"}}active{{end}}" href="/settings">设置</a>
-    </nav>
 
     {{if .Notice}}<div id="server-msg" data-type="success" style="display:none">{{.Notice}}</div>{{end}}
     {{if .Error}}<div id="server-msg" data-type="error" style="display:none">{{.Error}}</div>{{end}}
@@ -38,6 +37,13 @@
     <main class="content">
       {{.Content}}
     </main>
+
+    <footer class="site-footer">
+      <span>© 2025 CCP Switcher</span>
+      <a href="https://github.com/bonkcn/CCP-Switcher" target="_blank" rel="noopener noreferrer" title="GitHub" class="footer-github">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      </a>
+    </footer>
   </div>
 {{end}}
   
@@ -62,6 +68,34 @@
     }
     
     initPage();
+
+    // Provider tab switching - save state to sessionStorage
+    document.addEventListener('click', (e) => {
+      const tab = e.target.closest('.provider-tab');
+      if (!tab) return;
+      const tabGroup = tab.parentElement;
+      const container = tabGroup.parentElement;
+      const target = tab.getAttribute('data-tab');
+      tabGroup.querySelectorAll('.provider-tab').forEach(t => t.classList.toggle('active', t === tab));
+      container.querySelectorAll('.provider-tab-panel').forEach(p => p.classList.toggle('active', p.getAttribute('data-tab-panel') === target));
+      // Persist tab state
+      try { sessionStorage.setItem('ccp_provider_tab', target); } catch(e) {}
+    });
+
+    // Restore provider tab state on page load
+    (function restoreProviderTab() {
+      try {
+        const saved = sessionStorage.getItem('ccp_provider_tab');
+        if (!saved) return;
+        const tabGroup = document.querySelector('.provider-tabs');
+        if (!tabGroup) return;
+        const tab = tabGroup.querySelector('[data-tab="' + saved + '"]');
+        if (!tab) return;
+        const container = tabGroup.parentElement;
+        tabGroup.querySelectorAll('.provider-tab').forEach(t => t.classList.toggle('active', t === tab));
+        container.querySelectorAll('.provider-tab-panel').forEach(p => p.classList.toggle('active', p.getAttribute('data-tab-panel') === saved));
+      } catch(e) {}
+    })();
 
     document.addEventListener('click', async (e) => {
       const selectBtn = e.target.closest('[data-select-model]');
@@ -114,18 +148,28 @@
     document.addEventListener('submit', async (e) => {
       const form = e.target;
       if (form.method.toUpperCase() !== 'POST') return;
-      
+
       // Opt-out forms
       if (form.action.includes('/login') || form.action.includes('/logout') || form.getAttribute('data-no-ajax') === 'true') {
         return;
       }
-      
+
       e.preventDefault();
-      
+
       const submitBtn = e.submitter || (document.activeElement && document.activeElement.tagName === 'BUTTON' ? document.activeElement : form.querySelector('button[type="submit"]'));
       const action = submitBtn && submitBtn.getAttribute('formaction') ? submitBtn.getAttribute('formaction') : form.action;
       const method = submitBtn && submitBtn.getAttribute('formmethod') ? submitBtn.getAttribute('formmethod') : form.method;
       if (submitBtn) submitBtn.classList.add('is-loading');
+
+      // Detect if this is a switch or ping action that supports JSON
+      const isSwitchAction = /\/providers\/\d+\/switch$/.test(action);
+      const isPingAction = /\/providers\/\d+\/test\/connectivity$/.test(action);
+      const useJSON = isSwitchAction || isPingAction;
+
+      const savedScrollY = window.scrollY;
+      // Save current provider tab state before any HTML replacement
+      let savedTab = null;
+      try { savedTab = sessionStorage.getItem('ccp_provider_tab'); } catch(ex) {}
 
       try {
         const formData = new FormData(form, submitBtn || undefined);
@@ -143,13 +187,34 @@
           fetchOptions.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
           fetchOptions.body = new URLSearchParams(formData).toString();
         }
-        
+
+        if (useJSON) {
+          fetchOptions.headers = fetchOptions.headers || {};
+          fetchOptions.headers['X-Requested-With'] = 'XMLHttpRequest';
+          fetchOptions.headers['Accept'] = 'application/json';
+        }
+
         const response = await fetch(action, fetchOptions);
-        
+
+        if (useJSON) {
+          const json = await response.json();
+          if (json.ok) {
+            showToast(json.message, 'success');
+            if (isSwitchAction) {
+              applySwitch(form, json);
+            } else if (isPingAction) {
+              applyPing(form, json);
+            }
+          } else {
+            showToast(json.message || '操作失败', 'error');
+          }
+          return;
+        }
+
         const html = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-        
+
         if (response.redirected) {
             window.history.pushState({}, '', response.url);
         }
@@ -158,14 +223,29 @@
         if (newContent) {
           document.querySelector('.content').innerHTML = newContent.innerHTML;
         }
-        
+
+        // Restore provider tab state after HTML replacement
+        if (savedTab) {
+          const tabGroup = document.querySelector('.provider-tabs');
+          if (tabGroup) {
+            const tab = tabGroup.querySelector('[data-tab="' + savedTab + '"]');
+            if (tab) {
+              const container = tabGroup.parentElement;
+              tabGroup.querySelectorAll('.provider-tab').forEach(t => t.classList.toggle('active', t === tab));
+              container.querySelectorAll('.provider-tab-panel').forEach(p => p.classList.toggle('active', p.getAttribute('data-tab-panel') === savedTab));
+            }
+          }
+        }
+
+        window.scrollTo(0, savedScrollY);
+
         const newMsg = doc.getElementById('server-msg');
         if (newMsg) {
           showToast(newMsg.innerText, newMsg.getAttribute('data-type'));
         } else if (!response.ok) {
           showToast(`请求失败: HTTP ${response.status}`, 'error');
         }
-        
+
       } catch (err) {
         showToast('请求出错: ' + err.message, 'error');
       } finally {
@@ -174,6 +254,88 @@
         }
       }
     });
+
+    function applySwitch(form, json) {
+      const row = form.closest('.provider-row');
+      if (!row) return;
+      const section = row.closest('.provider-section');
+      if (!section) return;
+
+      // Remove active state from all rows in same section
+      section.querySelectorAll('.provider-row').forEach(r => {
+        r.classList.remove('provider-row-active');
+        const pill = r.querySelector('.pill.active');
+        if (pill) pill.remove();
+        // Show switch button if hidden
+        const switchForm = r.querySelector('form[action$="/switch"]');
+        if (!switchForm) {
+          const actions = r.querySelector('.row-actions');
+          if (actions && r !== row) {
+            // Re-add switch button for previously active row
+            const id = extractProviderId(r);
+            if (id) {
+              const newForm = document.createElement('form');
+              newForm.method = 'post';
+              newForm.action = '/providers/' + id + '/switch';
+              newForm.innerHTML = '<button class="button small" type="submit">切换使用</button>';
+              actions.appendChild(newForm);
+            }
+          }
+        }
+      });
+
+      // Set new active row
+      row.classList.add('provider-row-active');
+      row.classList.add('provider-row-flash');
+      setTimeout(() => row.classList.remove('provider-row-flash'), 1500);
+
+      const title = row.querySelector('.row-title');
+      if (title && !title.querySelector('.pill.active')) {
+        const activePill = document.createElement('span');
+        activePill.className = 'pill active';
+        activePill.textContent = '当前使用';
+        const strong = title.querySelector('strong');
+        if (strong) strong.after(activePill);
+      }
+
+      // Remove switch button from newly active row
+      const switchForm = row.querySelector('form[action$="/switch"]');
+      if (switchForm) switchForm.remove();
+
+      // Update section badge
+      const badge = section.querySelector('.section-badge strong');
+      if (badge) {
+        const name = row.querySelector('.row-title strong');
+        if (name) badge.textContent = name.textContent;
+      }
+    }
+
+    function applyPing(form, json) {
+      const row = form.closest('.provider-row');
+      if (!row) return;
+      row.classList.add('provider-row-flash');
+      setTimeout(() => row.classList.remove('provider-row-flash'), 1500);
+
+      // Update status pill
+      const pills = row.querySelectorAll('.pill');
+      pills.forEach(pill => {
+        if (pill.classList.contains('status-ok') || pill.classList.contains('status-error') || pill.classList.contains('status-neutral')) {
+          pill.className = 'pill ' + (json.test_status === 'ok' ? 'status-ok' : json.test_status === 'error' ? 'status-error' : 'status-neutral');
+          pill.textContent = json.test_status || '未测试';
+        }
+      });
+
+      // Update test result
+      const brief = row.querySelector('.row-result-brief');
+      if (brief) brief.textContent = json.test_label || '';
+    }
+
+    function extractProviderId(row) {
+      const link = row.querySelector('a[href*="/providers/"][href$="/edit"]');
+      if (!link) return null;
+      const match = link.getAttribute('href').match(/\/providers\/(\d+)\/edit/);
+      return match ? match[1] : null;
+    }
   </script>
 </body>
 </html>

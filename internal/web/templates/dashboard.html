@@ -18,73 +18,77 @@
 
 <section class="grid two">
   <article class="panel" style="position:relative;margin-bottom:0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-      <div>
-        <h3 style="font-size:14px;display:flex;align-items:center;gap:6px;">
-          Claude 接管状态
-          <div class="tooltip-wrap bottom-left">
-            <span class="tooltip-icon">?</span>
-            <div class="tooltip-content">
-              <strong>当前写入策略 ({{.ClaudeManaged.Mode}})</strong><br>
-              <span style="white-space:pre-wrap;font-size:10px;">{{.ClaudeManaged.Details}}</span>
-            </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+      <h3 style="font-size:14px;display:flex;align-items:center;gap:6px;">
+        Claude 接管状态
+        <div class="tooltip-wrap bottom-left">
+          <span class="tooltip-icon">?</span>
+          <div class="tooltip-content">
+            <strong>当前写入策略 ({{.ClaudeManaged.Mode}})</strong><br>
+            <span style="white-space:pre-wrap;font-size:10px;">{{.ClaudeManaged.Details}}</span>
           </div>
-        </h3>
-        <div class="subtle"><code>{{.ClaudePath}}</code></div>
-      </div>
+        </div>
+      </h3>
       <div>
         {{if .ActiveClaude}}<span class="pill status-ok">已接管</span>{{else}}<span class="pill status-neutral">未配置</span>{{end}}
       </div>
     </div>
-    
-    <div style="background:var(--bg-accent);padding:12px;border-radius:var(--radius-md);margin-bottom:16px;border:1px solid var(--border);">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="muted">当前接入网关</span>
+
+    <div class="dash-status-row">
+      <div class="dash-status-cell">
+        <span class="muted">当前策略</span>
+        <strong style="font-size:13px;">{{.ClaudeManaged.Mode}}</strong>
+      </div>
+      <div class="dash-status-divider"></div>
+      <div class="dash-status-cell">
+        <span class="muted">当前网关</span>
         {{if .ActiveClaude}}
-          <strong>{{.ActiveClaude.Name}}</strong>
+          <strong style="font-size:13px;">{{.ActiveClaude.Name}}</strong>
         {{else}}
-          <span style="color:var(--warn-text);">未配置</span>
+          <span style="color:var(--warn-text);font-size:13px;">未配置</span>
         {{end}}
       </div>
     </div>
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
       <a class="button secondary small" href="/providers">更换网关</a>
     </div>
   </article>
 
   <article class="panel" style="position:relative;margin-bottom:0;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-      <div>
-        <h3 style="font-size:14px;display:flex;align-items:center;gap:6px;">
-          Codex 接管状态
-          <div class="tooltip-wrap bottom-left">
-            <span class="tooltip-icon">?</span>
-            <div class="tooltip-content">
-              <strong>当前写入策略 ({{.CodexManaged.Mode}})</strong><br>
-              <span style="white-space:pre-wrap;font-size:10px;">{{.CodexManaged.Details}}</span>
-            </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+      <h3 style="font-size:14px;display:flex;align-items:center;gap:6px;">
+        Codex 接管状态
+        <div class="tooltip-wrap bottom-left">
+          <span class="tooltip-icon">?</span>
+          <div class="tooltip-content">
+            <strong>当前写入策略 ({{.CodexManaged.Mode}})</strong><br>
+            <span style="white-space:pre-wrap;font-size:10px;">{{.CodexManaged.Details}}</span>
           </div>
-        </h3>
-        <div class="subtle"><code>{{.CodexConfigPath}}</code></div>
-      </div>
+        </div>
+      </h3>
       <div>
         {{if .ActiveCodex}}<span class="pill status-ok">已接管</span>{{else}}<span class="pill status-neutral">未配置</span>{{end}}
       </div>
     </div>
 
-    <div style="background:var(--bg-accent);padding:12px;border-radius:var(--radius-md);margin-bottom:16px;border:1px solid var(--border);">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="muted">当前推理网关</span>
+    <div class="dash-status-row">
+      <div class="dash-status-cell">
+        <span class="muted">当前策略</span>
+        <strong style="font-size:13px;">{{.CodexManaged.Mode}}</strong>
+      </div>
+      <div class="dash-status-divider"></div>
+      <div class="dash-status-cell">
+        <span class="muted">当前网关</span>
         {{if .ActiveCodex}}
-          <strong>{{.ActiveCodex.Name}}</strong>
+          <strong style="font-size:13px;">{{.ActiveCodex.Name}}</strong>
         {{else}}
-          <span style="color:var(--warn-text);">未配置</span>
+          <span style="color:var(--warn-text);font-size:13px;">未配置</span>
         {{end}}
       </div>
     </div>
 
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
       <a class="button secondary small" href="/providers">更换网关</a>
     </div>
   </article>

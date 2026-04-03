@@ -1,68 +1,13 @@
 {{define "providers.html"}}
-<section class="provider-section">
+<div class="provider-tabs">
+  <button class="provider-tab active" data-tab="codex">Codex</button>
+  <button class="provider-tab" data-tab="claude">Claude Code</button>
+</div>
+
+<section class="provider-section provider-tab-panel active" data-tab-panel="codex">
   <div class="section-head">
     <div style="display:flex;align-items:center;gap:8px;">
-      <h2>Claude 列表</h2>
-      <div class="tooltip-wrap right">
-        <span class="tooltip-icon">i</span>
-        <div class="tooltip-content">配置将应用至 <code>~/.claude/settings.json</code>。新增后请先测试连通性。</div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <div class="section-badge">当前生效: <strong>{{if .ActiveClaude}}{{.ActiveClaude.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .ClaudeProviders}}</div>
-      <a class="button secondary small" href="/providers/new?kind=claude">新增 Claude</a>
-    </div>
-  </div>
-
-  <div class="provider-list">
-    {{range .ClaudeProviders}}
-    <article class="provider-row {{if isActive $.ActiveIDs .}}provider-row-active{{end}}">
-      <div class="row-main">
-        <div class="row-header">
-          <div class="row-title">
-            <strong>{{.Name}}</strong>
-            {{if isActive $.ActiveIDs .}}<span class="pill active">当前使用</span>{{end}}
-            <span class="pill {{statusClass .LastTestStatus}}">{{if .LastTestStatus}}{{.LastTestStatus}}{{else}}未测试{{end}}</span>
-          </div>
-          <code class="row-url">{{truncateText .BaseURL 84}}</code>
-        </div>
-        <div class="row-meta">
-          <span class="meta-pill">模型: {{if .Model}}{{.Model}}{{else}}未指定{{end}}</span>
-          <span class="meta-pill">权限模式: {{.ClaudeDefaultMode}}</span>
-          {{if .ClaudeSkipDangerousPrompt}}<span class="meta-pill">跳过危险确认</span>{{end}}
-          {{if .ClaudeUseSandbox}}<span class="meta-pill">IS_SANDBOX=1</span>{{end}}
-        </div>
-        <div class="row-result" style="display:flex;align-items:center;gap:6px;font-size:11px;">
-          <span class="muted">最近测试</span>
-          <span class="row-result-brief">{{testStatusLabel .LastTestStatus .LastTestMessage}}</span>
-          {{if .LastTestMessage}}
-          <div class="tooltip-wrap">
-             <span class="tooltip-icon" style="cursor:zoom-in;">+</span>
-             <div class="tooltip-content" style="white-space:pre-wrap;max-width:400px;">{{.LastTestMessage}}</div>
-          </div>
-          {{end}}
-        </div>
-      </div>
-      <div class="row-actions">
-        <form method="post" action="/providers/{{.ID}}/test/connectivity"><button class="button ghost small" type="submit">Ping</button></form>
-        <a class="button ghost small" href="/providers/{{.ID}}/probe">探测</a>
-        <a class="button ghost small" href="/providers/{{.ID}}/edit">编辑</a>
-        <form method="post" action="/providers/{{.ID}}/delete" onsubmit="return confirm('确认删除该供应商配置？');"><button class="button ghost-danger small" type="submit">删除</button></form>
-        {{if not (isActive $.ActiveIDs .)}}
-        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit">切换使用</button></form>
-        {{end}}
-      </div>
-    </article>
-    {{else}}
-    <article class="provider-empty">暂无 Claude 供应商</article>
-    {{end}}
-  </div>
-</section>
-
-<section class="provider-section">
-  <div class="section-head">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <h2>Codex 列表</h2>
+      <h2 style="margin:0;">Codex 供应商</h2>
       <div class="tooltip-wrap right">
         <span class="tooltip-icon">i</span>
         <div class="tooltip-content">配置将应用至 <code>~/.codex/config.toml</code> 与 <code>auth.json</code>。探测前需选定模型。</div>
@@ -120,6 +65,66 @@
   </div>
 </section>
 
+<section class="provider-section provider-tab-panel" data-tab-panel="claude">
+  <div class="section-head">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <h2 style="margin:0;">Claude Code 供应商</h2>
+      <div class="tooltip-wrap right">
+        <span class="tooltip-icon">i</span>
+        <div class="tooltip-content">配置将应用至 <code>~/.claude/settings.json</code>。新增后请先测试连通性。</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="section-badge">当前生效: <strong>{{if .ActiveClaude}}{{.ActiveClaude.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .ClaudeProviders}}</div>
+      <a class="button secondary small" href="/providers/new?kind=claude">新增 Claude</a>
+    </div>
+  </div>
+
+  <div class="provider-list">
+    {{range .ClaudeProviders}}
+    <article class="provider-row {{if isActive $.ActiveIDs .}}provider-row-active{{end}}">
+      <div class="row-main">
+        <div class="row-header">
+          <div class="row-title">
+            <strong>{{.Name}}</strong>
+            {{if isActive $.ActiveIDs .}}<span class="pill active">当前使用</span>{{end}}
+            <span class="pill {{statusClass .LastTestStatus}}">{{if .LastTestStatus}}{{.LastTestStatus}}{{else}}未测试{{end}}</span>
+          </div>
+          <code class="row-url">{{truncateText .BaseURL 84}}</code>
+        </div>
+        <div class="row-meta">
+          <span class="meta-pill">模型: {{if .Model}}{{.Model}}{{else}}未指定{{end}}</span>
+          <span class="meta-pill">权限模式: {{.ClaudeDefaultMode}}</span>
+          {{if .ClaudeSkipDangerousPrompt}}<span class="meta-pill">跳过危险确认</span>{{end}}
+          {{if .ClaudeUseSandbox}}<span class="meta-pill">IS_SANDBOX=1</span>{{end}}
+        </div>
+        <div class="row-result" style="display:flex;align-items:center;gap:6px;font-size:11px;">
+          <span class="muted">最近测试</span>
+          <span class="row-result-brief">{{testStatusLabel .LastTestStatus .LastTestMessage}}</span>
+          {{if .LastTestMessage}}
+          <div class="tooltip-wrap">
+             <span class="tooltip-icon" style="cursor:zoom-in;">+</span>
+             <div class="tooltip-content" style="white-space:pre-wrap;max-width:400px;">{{.LastTestMessage}}</div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      <div class="row-actions">
+        <form method="post" action="/providers/{{.ID}}/test/connectivity"><button class="button ghost small" type="submit">Ping</button></form>
+        <a class="button ghost small" href="/providers/{{.ID}}/probe">探测</a>
+        <a class="button ghost small" href="/providers/{{.ID}}/edit">编辑</a>
+        <form method="post" action="/providers/{{.ID}}/delete" onsubmit="return confirm('确认删除该供应商配置？');"><button class="button ghost-danger small" type="submit">删除</button></form>
+        {{if not (isActive $.ActiveIDs .)}}
+        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit">切换使用</button></form>
+        {{end}}
+      </div>
+    </article>
+    {{else}}
+    <article class="provider-empty">暂无 Claude Code 供应商</article>
+    {{end}}
+  </div>
+</section>
+
 {{if .Probe}}
 <div class="modal-shell">
   <div class="modal-scrim"></div>
@@ -161,7 +166,7 @@
             <button class="button secondary" type="submit" formaction="/providers/{{.Probe.Provider.ID}}/probe/models">拉取库</button>
           </div>
         </label>
-        
+
         <div style="display:flex;flex-direction:column;justify-content:flex-end;">
           <div class="selected-model-card" style="margin:0;">
              <div><span class="muted" style="font-size:10px;">已选择模型：</span><strong id="probe-model-display" style="font-size:13px;margin-left:8px;">{{if .Probe.SelectedModel}}{{.Probe.SelectedModel}}{{else}}未选择{{end}}</strong></div>
