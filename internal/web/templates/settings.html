@@ -26,6 +26,11 @@
           <input type="text" name="site_name" value="{{.SiteName}}" placeholder="CCP Switcher" style="padding:6px 10px;flex:1;">
           <button class="button secondary small" type="submit">保存</button>
         </form>
+        <form method="post" action="/settings/listen_addr" style="display:flex;align-items:center;gap:8px;" onsubmit="return confirm('修改监听地址将触发服务重启，当前连接可能中断。\n\n确认修改？');">
+          <span style="font-size:13px;font-weight:600;white-space:nowrap;width:56px;">监听地址</span>
+          <input type="text" name="listen_addr" value="{{.ListenAddr}}" placeholder="127.0.0.1:4680" style="padding:6px 10px;flex:1;font-family:ui-monospace,monospace;">
+          <button class="button secondary small" type="submit">⚠ 重启生效</button>
+        </form>
       </div>
 
       <div style="height:1px;background:var(--border);"></div>
@@ -34,15 +39,15 @@
       <div style="display:flex;flex-direction:column;gap:16px;">
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <span style="font-size:13px;font-weight:600;">接口鉴证 (API Token)</span>
+            <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">接口鉴证 (API Token)
+              <div class="tooltip-wrap bottom-left"><span class="tooltip-icon">i</span><div class="tooltip-content">自动化脚本请求时需在 Header 中携带 <code>Bearer [Token]</code>。<br>初始凭证保存在: <code>{{.BootstrapPath}}</code></div></div>
+            </span>
             <form method="post" action="/settings/token" style="margin:0;"><button class="button secondary small" type="submit">重置签发</button></form>
           </div>
           {{if .GeneratedToken}}
           <div style="padding:8px 10px;background:var(--ok);border-radius:var(--radius-sm);color:var(--ok-text);font-size:12px;display:flex;align-items:center;gap:8px;">
             <strong>已刷新:</strong> <code style="padding:2px 4px;background:var(--panel);">{{.GeneratedToken}}</code>
           </div>
-          {{else}}
-          <div class="muted" style="font-size:11px;">脚本 Header 携带 `Bearer [Token]`。凭证保存在: <code>{{.BootstrapPath}}</code></div>
           {{end}}
         </div>
 
@@ -52,6 +57,27 @@
             <input type="password" name="password" autocomplete="new-password" placeholder="输入新密码" required style="padding:6px 10px;flex:1;">
             <input type="password" name="confirm_password" autocomplete="new-password" placeholder="再次确认" required style="padding:6px 10px;flex:1;">
             <button class="button small" type="submit">修改</button>
+          </div>
+        </form>
+      </div>
+
+      <div style="height:1px;background:var(--border);"></div>
+
+      <!-- HTTPS 自动证书 -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <form method="post" action="/settings/tls" style="display:flex;flex-direction:column;gap:12px;" onsubmit="return confirm('修改 HTTPS 配置将触发服务重启。\n\n确认修改？');">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">
+              HTTPS 自动证书
+              <div class="tooltip-wrap bottom-left"><span class="tooltip-icon">i</span><div class="tooltip-content">启用后将自动通过 Let's Encrypt 签发 TLS 证书。需要：<br>1. 域名 DNS 已解析到本机<br>2. 80 和 443 端口可用（未被 Nginx 等占用）<br><br>原始 HTTP 端口始终保持可用作为回退。</div></div>
+            </span>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <label style="display:flex;flex-direction:row;align-items:center;gap:6px;font-weight:normal;font-size:13px;cursor:pointer;flex-shrink:0;">
+              <input type="checkbox" name="tls_enabled" {{if .TLSEnabled}}checked{{end}}> 启用 HTTPS
+            </label>
+            <input type="text" name="tls_domain" value="{{.TLSDomain}}" placeholder="your-domain.example.com" style="padding:6px 10px;flex:1;font-family:ui-monospace,monospace;">
+            <button class="button secondary small" type="submit" style="white-space:nowrap;">⚠ 重启生效</button>
           </div>
         </form>
       </div>

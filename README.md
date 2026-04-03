@@ -19,9 +19,17 @@ curl -fsSL https://raw.githubusercontent.com/bonkcn/CCP-Switcher/main/install.sh
 /root/.ccp-switcher/bootstrap-credentials.txt
 ```
 
-### 反向代理接入
+### 远程访问
 
-服务仅监听本地回环地址，生产环境需通过 Nginx / Caddy 等反向代理暴露并配置 TLS。
+服务默认仅监听本地回环地址 `127.0.0.1:4680`，提供两种远程暴露方式：
+
+**方式一：内置 HTTPS 自动证书（推荐，适用于干净环境）**
+
+在 WebUI 设置页中配置域名并启用 HTTPS，系统将通过 Let's Encrypt 自动签发 TLS 证书，同时监听 `:80`（ACME challenge + 跳转）和 `:443`（HTTPS），无需额外安装 Nginx / Caddy。要求 80 和 443 端口可用且域名 DNS 已解析到本机。
+
+**方式二：外部反向代理**
+
+适用于已有 Web 服务器的环境，通过 Nginx / Caddy 反代 `127.0.0.1:4680` 并配置 TLS：
 
 ```nginx
 server {
@@ -37,6 +45,8 @@ server {
     }
 }
 ```
+
+> 监听地址可在设置页面动态修改（如改为 `0.0.0.0:4680` 直接暴露），修改后自动重写 systemd 配置并重启服务。
 
 ### API Token 鉴权
 
@@ -70,6 +80,7 @@ curl -H "Authorization: Bearer <API_TOKEN>" http://127.0.0.1:4680/providers
 
 ### 全站配置管理
 
+- **网络与接入**：面板内可配监听地址和内置 ACME HTTPS 自动证书，修改后自动联动 systemd 重启
 - **站点品牌定制**：自定义站点名称，影响导航栏标识与浏览器标签页标题
 - **数据导入导出**：支持供应商级和全站级（含供应商、云同步设置、站点配置）的 JSON 格式导入导出
 - **版本监测与热更新**：内置远端源码版本比对与强制覆盖更新机制

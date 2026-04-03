@@ -17,6 +17,8 @@ type Config struct {
 	ClaudeCommand            string
 	CodexCommand             string
 	DefaultWorkdir           string
+	CertDir                  string
+	ServiceFilePath          string
 }
 
 func LoadConfig() Config {
@@ -34,6 +36,8 @@ func LoadConfig() Config {
 		ClaudeCommand:            getenv("CCP_SWITCHER_CLAUDE_CMD", "claude"),
 		CodexCommand:             getenv("CCP_SWITCHER_CODEX_CMD", "codex"),
 		DefaultWorkdir:           getenv("CCP_SWITCHER_WORKDIR", "/root"),
+		CertDir:                  getenv("CCP_SWITCHER_CERT_DIR", filepath.Join(dataDir, "certs")),
+		ServiceFilePath:          getenv("CCP_SWITCHER_SERVICE_PATH", "/etc/systemd/system/ccp-switcher.service"),
 	}
 }
 

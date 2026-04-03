@@ -155,6 +155,10 @@ CCP Switcher 已安装完成。
 
 查看日志:
   journalctl -u ccp-switcher -n 100 --no-pager
+
+远程访问:
+  如需远程访问，可在 WebUI 设置页修改监听地址为 0.0.0.0:4680，
+  或启用内置 HTTPS 自动证书功能（需域名 + 80/443 端口）。
 EOF
 }
 

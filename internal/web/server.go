@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bufio"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +69,8 @@ type viewData struct {
 	Version         *versionStatusView
 	SyncConfig      cloudsync.Config
 	SyncStatus      cloudsync.SyncStatus
+	TLSEnabled      bool
+	TLSDomain       string
 }
 
 type providerProbeView struct {
@@ -138,6 +142,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /settings/version/check", s.authenticated(s.handleVersionCheck))
 	mux.HandleFunc("POST /settings/update", s.authenticated(s.handleSelfUpdate))
 	mux.HandleFunc("POST /settings/site_name", s.authenticated(s.handleSiteNameUpdate))
+	mux.HandleFunc("POST /settings/listen_addr", s.authenticated(s.handleListenAddrUpdate))
+	mux.HandleFunc("POST /settings/tls", s.authenticated(s.handleTLSUpdate))
 	mux.HandleFunc("GET /settings/export/providers", s.authenticated(s.handleProvidersExport))
 	mux.HandleFunc("GET /settings/export/full", s.authenticated(s.handleFullExport))
 	mux.HandleFunc("POST /settings/import/providers", s.authenticated(s.handleProvidersImportSettings))
@@ -773,6 +779,87 @@ func (s *Server) handleSiteNameUpdate(w http.ResponseWriter, r *http.Request) {
 	s.redirectWithMessage(w, r, "/settings", "站点名称已更新", "")
 }
 
+func (s *Server) handleListenAddrUpdate(w http.ResponseWriter, r *http.Request) {
+	addr := strings.TrimSpace(r.FormValue("listen_addr"))
+	if addr == "" {
+		s.redirectWithMessage(w, r, "/settings", "", "监听地址不能为空")
+		return
+	}
+	// Basic validation
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "监听地址格式无效，需要 host:port 格式")
+		return
+	}
+	if err := s.store.SetSetting("listen_addr", addr); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "保存监听地址失败: "+err.Error())
+		return
+	}
+	if err := s.patchSystemdListenAddr(addr); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "监听地址已保存但 systemd 更新失败: "+err.Error(), "")
+		return
+	}
+	s.redirectWithMessage(w, r, "/settings", "监听地址已更新为 "+addr+"，服务正在重启...", "")
+	go s.restartService()
+}
+
+func (s *Server) handleTLSUpdate(w http.ResponseWriter, r *http.Request) {
+	enabled := r.FormValue("tls_enabled") == "on"
+	domain := strings.TrimSpace(r.FormValue("tls_domain"))
+	if enabled && domain == "" {
+		s.redirectWithMessage(w, r, "/settings", "", "启用 HTTPS 必须填写域名")
+		return
+	}
+	cfg := TLSConfig{Enabled: enabled, Domain: domain}
+	if err := SaveTLSConfig(s.store, cfg); err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", "保存 TLS 配置失败: "+err.Error())
+		return
+	}
+	if enabled {
+		s.redirectWithMessage(w, r, "/settings", "HTTPS 已启用 ("+domain+")，服务正在重启...", "")
+	} else {
+		s.redirectWithMessage(w, r, "/settings", "HTTPS 已关闭，服务正在重启...", "")
+	}
+	go s.restartService()
+}
+
+// patchSystemdListenAddr rewrites the CCP_SWITCHER_LISTEN environment in the systemd unit file.
+func (s *Server) patchSystemdListenAddr(addr string) error {
+	path := s.cfg.ServiceFilePath
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("读取 service 文件失败: %w", err)
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	found := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Environment=CCP_SWITCHER_LISTEN=") {
+			lines = append(lines, "Environment=CCP_SWITCHER_LISTEN="+addr)
+			found = true
+		} else {
+			lines = append(lines, line)
+		}
+	}
+	if !found {
+		return fmt.Errorf("service 文件中未找到 CCP_SWITCHER_LISTEN 环境变量")
+	}
+
+	output := strings.Join(lines, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(output), 0o644); err != nil {
+		return fmt.Errorf("写入 service 文件失败: %w", err)
+	}
+	return nil
+}
+
+// restartService triggers systemctl daemon-reload + restart.
+func (s *Server) restartService() {
+	time.Sleep(500 * time.Millisecond) // Allow response to flush
+	_ = exec.Command("systemctl", "daemon-reload").Run()
+	_ = exec.Command("systemctl", "restart", "ccp-switcher").Run()
+}
+
 func (s *Server) siteName() string {
 	name, _ := s.store.GetSetting("site_name")
 	if name == "" {
@@ -823,6 +910,11 @@ func (s *Server) renderSettingsPage(w http.ResponseWriter, status int, notice st
 }
 
 func (s *Server) settingsViewData(notice string, errorMessage string, generatedToken string, checkRemote bool) viewData {
+	tlsCfg := LoadTLSConfig(s.store)
+	listenAddr, _ := s.store.GetSetting("listen_addr")
+	if listenAddr == "" {
+		listenAddr = s.cfg.ListenAddr
+	}
 	return viewData{
 		Title:           "Settings",
 		SiteName:        s.siteName(),
@@ -833,6 +925,9 @@ func (s *Server) settingsViewData(notice string, errorMessage string, generatedT
 		GeneratedToken:  generatedToken,
 		BootstrapPath:   s.cfg.BootstrapCredentialsPath,
 		Version:         inspectVersionStatus(s.repoDir, checkRemote),
+		ListenAddr:      listenAddr,
+		TLSEnabled:      tlsCfg.Enabled,
+		TLSDomain:       tlsCfg.Domain,
 	}
 }
 
