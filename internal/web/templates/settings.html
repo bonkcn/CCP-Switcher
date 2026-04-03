@@ -5,21 +5,8 @@
     
     <div style="display:flex;flex-direction:column;gap:20px;">
       
-      <!-- 站点与版本 -->
+      <!-- 站点设置 -->
       <div style="display:flex;flex-direction:column;gap:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <span style="font-size:13px;font-weight:600;">程序版本</span>
-            <span class="muted" style="margin-left:8px;font-family:ui-monospace,monospace;">{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</span>
-            {{if .Version.UpdateAvailable}}<span class="pill status-neutral" style="margin-left:4px;transform:scale(0.9);">新版本 {{.Version.RemoteVersion}}</span>{{end}}
-          </div>
-          <div style="display:flex;gap:4px;">
-            <form method="post" action="/settings/version/check" style="margin:0;"><button class="button secondary small" type="submit">查验</button></form>
-            <form method="post" action="/settings/update" style="margin:0;" onsubmit="return confirm('确认强制热更新并覆盖代码？');">
-              <button class="button small" type="submit" {{if not .Version.CanUpdate}}disabled{{end}}>更新</button>
-            </form>
-          </div>
-        </div>
 
         <form method="post" action="/settings/site_name" style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:13px;font-weight:600;white-space:nowrap;width:56px;">站点名称</span>
@@ -121,6 +108,21 @@
           </label>
           <button class="button small" type="submit" style="white-space:nowrap;">↑ 导入全部</button>
         </form>
+      </div>
+      <!-- 程序版本 -->
+      <div style="height:1px;background:var(--border);"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <span style="font-size:13px;font-weight:600;">程序版本</span>
+          <span class="muted" style="margin-left:8px;font-family:ui-monospace,monospace;">{{if .Version.LocalVersion}}{{.Version.LocalVersion}}{{else}}未知{{end}}</span>
+          {{if .Version.UpdateAvailable}}<span class="pill status-neutral" style="margin-left:4px;transform:scale(0.9);">新版本 {{.Version.RemoteVersion}}</span>{{end}}
+        </div>
+        <div style="display:flex;gap:4px;">
+          <form method="post" action="/settings/version/check" style="margin:0;"><button class="button secondary small" type="submit">查验</button></form>
+          <form method="post" action="/settings/update" style="margin:0;" onsubmit="return confirm('确认强制热更新并覆盖代码？');">
+            <button class="button small" type="submit" {{if not .Version.CanUpdate}}disabled{{end}}>更新</button>
+          </form>
+        </div>
       </div>
       
     </div>
