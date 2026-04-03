@@ -134,6 +134,7 @@ EOF
 }
 
 print_summary() {
+  local cred_file="${DATA_DIR}/bootstrap-credentials.txt"
   cat <<EOF
 
 CCP Switcher 已安装完成。
@@ -147,9 +148,6 @@ CCP Switcher 已安装完成。
 数据目录:
   ${DATA_DIR}
 
-首次密码 / API Token 文件:
-  ${DATA_DIR}/bootstrap-credentials.txt
-
 查看服务状态:
   systemctl status ccp-switcher --no-pager
 
@@ -160,6 +158,17 @@ CCP Switcher 已安装完成。
   如需远程访问，可在 WebUI 设置页修改监听地址为 0.0.0.0:4680，
   或启用内置 HTTPS 自动证书功能（需域名 + 80/443 端口）。
 EOF
+
+  if [[ -f "${cred_file}" ]]; then
+    echo ""
+    echo "============================================"
+    echo "  初始登录凭证"
+    echo "============================================"
+    cat "${cred_file}"
+    echo "============================================"
+    echo ""
+    echo "请妥善保管以上凭证，后续可在 WebUI 设置页修改。"
+  fi
 }
 
 ensure_base_packages
