@@ -108,3 +108,6 @@ Codex 供应端支持细粒度安全边界干预：
 ---
 
 *系统主数据持久化于 `/root/.ccp-switcher`，核心挂载目录与环境变量定义参见 `internal/runtime`。*
+
+### Community
+本项目与 [LINUX DO](https://linux.do/) 社区共享。
