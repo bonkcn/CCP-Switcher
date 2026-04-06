@@ -43,7 +43,7 @@
       <div class="dash-status-cell">
         <span class="muted">当前网关</span>
         {{if .ActiveClaude}}
-          <strong style="font-size:13px;">{{.ActiveClaude.Name}}</strong>
+          <strong style="font-size:13px;">{{.ActiveClaude.Name}} · {{sourceLabel .ActiveClaude.Source}}</strong>
         {{else}}
           <span style="color:var(--warn-text);font-size:13px;">未配置</span>
         {{end}}
@@ -81,7 +81,7 @@
       <div class="dash-status-cell">
         <span class="muted">当前网关</span>
         {{if .ActiveCodex}}
-          <strong style="font-size:13px;">{{.ActiveCodex.Name}}</strong>
+          <strong style="font-size:13px;">{{.ActiveCodex.Name}} · {{sourceLabel .ActiveCodex.Source}}</strong>
         {{else}}
           <span style="color:var(--warn-text);font-size:13px;">未配置</span>
         {{end}}

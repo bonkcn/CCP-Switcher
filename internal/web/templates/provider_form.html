@@ -2,7 +2,7 @@
 <section class="panel form-panel" style="max-width:800px;">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:16px;">
     <h2 style="margin:0;">
-      {{if .Provider.ID}}编辑{{else}}新增{{end}} {{kindLabel .Provider.Kind}} 供应商
+      {{if .Provider.ID}}编辑{{else}}新增{{end}} {{kindLabel .Provider.Kind}} {{sourceLabel .Provider.Source}}配置
     </h2>
     <div class="tooltip-wrap bottom-right">
       <span class="tooltip-icon">i</span>
@@ -12,6 +12,7 @@
   
   <form method="post" action="{{if .Provider.ID}}/providers/{{.Provider.ID}}{{else}}/providers{{end}}" style="display:flex;flex-direction:column;gap:20px;">
     <input type="hidden" name="kind" value="{{.Provider.Kind}}">
+    <input type="hidden" name="source" value="{{.Provider.Source}}">
 
     <div class="form-grid two">
       <label>
@@ -25,6 +26,7 @@
       </label>
     </div>
 
+    {{if isGateway .Provider}}
     <label>
       <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">Base URL</span>
       <input type="url" name="base_url" value="{{.Provider.BaseURL}}" placeholder="https://api.example.com/v1" required>
@@ -34,6 +36,20 @@
       <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">{{if eq .Provider.Kind "claude"}}认证 Token{{else}}API Key{{end}}</span>
       <input type="password" name="secret" placeholder="{{if .Provider.ID}}输入新密钥以更新，留空保持原样{{else}}sk-xxxxxxxx{{end}}">
     </label>
+    {{else}}
+    <section style="padding:16px 18px;border:1px dashed var(--border);border-radius:16px;background:rgba(255,255,255,0.03);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+        <div>
+          <strong style="display:block;font-size:13px;">官方订阅账号登录说明</strong>
+          <p class="muted" style="margin:6px 0 0;font-size:12px;line-height:1.6;">保存后可在列表页启动浏览器认证。系统会为每个官方账号维护独立 {{if eq .Provider.Kind "codex"}}<code>CODEX_HOME</code>{{else}}<code>HOME</code> / <code>~/.claude</code>{{end}}，便于多账号隔离切换。</p>
+        </div>
+        <div class="tooltip-wrap bottom-left">
+          <span class="tooltip-icon">i</span>
+          <div class="tooltip-content">官方账号不需要 Base URL / API Key。{{if eq .Provider.Kind "codex"}}登录成功后会生成该账号独立的 <code>auth.json</code>，切换时同步到全局 <code>~/.codex</code>。{{else}}登录成功后会生成该账号独立的 <code>.claude.json</code> / <code>.claude/.credentials.json</code> / <code>settings.json</code>，切换时同步到全局 Claude 目录。{{end}}</div>
+        </div>
+      </div>
+    </section>
+    {{end}}
 
     {{if eq .Provider.Kind "codex"}}
     <div style="padding-top:16px;border-top:1px dashed var(--border);">

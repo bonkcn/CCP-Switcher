@@ -18,10 +18,16 @@ type Store struct {
 	masterKey []byte
 }
 
+const (
+	ProviderSourceGateway  = "gateway"
+	ProviderSourceOfficial = "official"
+)
+
 type Provider struct {
 	ID                        int64
 	UID                       string
 	Kind                      string
+	Source                    string
 	Name                      string
 	BaseURL                   string
 	Secret                    string
@@ -92,6 +98,7 @@ CREATE TABLE IF NOT EXISTS providers (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	uid TEXT NOT NULL DEFAULT '',
 	kind TEXT NOT NULL CHECK (kind IN ('claude', 'codex')),
+	source TEXT NOT NULL DEFAULT 'gateway' CHECK (source IN ('gateway', 'official')),
 	name TEXT NOT NULL,
 	base_url TEXT NOT NULL,
 	secret_ciphertext TEXT NOT NULL,
@@ -138,6 +145,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 	}
 	for _, stmt := range []string{
 		`ALTER TABLE providers ADD COLUMN uid TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE providers ADD COLUMN source TEXT NOT NULL DEFAULT 'gateway'`,
 		`ALTER TABLE providers ADD COLUMN codex_approval_policy TEXT NOT NULL DEFAULT 'on-request'`,
 		`ALTER TABLE providers ADD COLUMN codex_sandbox_mode TEXT NOT NULL DEFAULT 'workspace-write'`,
 	} {
@@ -156,7 +164,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 func (s *Store) ListProviders(kind string) ([]Provider, error) {
 	query := `
-SELECT id, uid, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
+SELECT id, uid, kind, source, name, base_url, secret_ciphertext, model, reasoning_effort,
        codex_approval_policy, codex_sandbox_mode,
        claude_default_mode, claude_use_sandbox, claude_skip_dangerous_prompt,
        last_test_status, last_test_message, last_test_at, created_at, updated_at
@@ -166,7 +174,7 @@ FROM providers`
 		query += " WHERE kind = ?"
 		args = append(args, kind)
 	}
-	query += " ORDER BY kind, name, id"
+	query += " ORDER BY kind, source, name, id"
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -190,7 +198,7 @@ FROM providers`
 
 func (s *Store) GetProvider(id int64) (Provider, error) {
 	row := s.db.QueryRow(`
-SELECT id, uid, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
+SELECT id, uid, kind, source, name, base_url, secret_ciphertext, model, reasoning_effort,
        codex_approval_policy, codex_sandbox_mode,
        claude_default_mode, claude_use_sandbox, claude_skip_dangerous_prompt,
        last_test_status, last_test_message, last_test_at, created_at, updated_at
@@ -211,13 +219,19 @@ func (s *Store) SaveProvider(provider *Provider) error {
 	if provider.Kind != "claude" && provider.Kind != "codex" {
 		return errors.New("provider kind must be claude or codex")
 	}
+	if provider.Source == "" {
+		provider.Source = "gateway"
+	}
+	if provider.Source != "gateway" && provider.Source != "official" {
+		return errors.New("provider source must be gateway or official")
+	}
 	if strings.TrimSpace(provider.Name) == "" {
 		return errors.New("provider name is required")
 	}
-	if strings.TrimSpace(provider.BaseURL) == "" {
+	if provider.Source == "gateway" && strings.TrimSpace(provider.BaseURL) == "" {
 		return errors.New("provider base url is required")
 	}
-	if provider.Secret == "" {
+	if provider.Source == "gateway" && provider.Secret == "" {
 		return errors.New("provider secret is required")
 	}
 	provider.UID = strings.TrimSpace(provider.UID)
@@ -238,13 +252,14 @@ func (s *Store) SaveProvider(provider *Provider) error {
 	if provider.ID == 0 {
 		result, err := s.db.Exec(`
 INSERT INTO providers (
-	uid, kind, name, base_url, secret_ciphertext, model, reasoning_effort,
+	uid, kind, source, name, base_url, secret_ciphertext, model, reasoning_effort,
 	codex_approval_policy, codex_sandbox_mode,
 	claude_default_mode, claude_use_sandbox, claude_skip_dangerous_prompt,
 	last_test_status, last_test_message, last_test_at, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', ?, ?)`,
 			provider.UID,
 			provider.Kind,
+			provider.Source,
 			strings.TrimSpace(provider.Name),
 			strings.TrimSpace(provider.BaseURL),
 			ciphertext,
@@ -268,12 +283,13 @@ INSERT INTO providers (
 
 	_, err = s.db.Exec(`
 UPDATE providers
-SET uid = ?, name = ?, base_url = ?, secret_ciphertext = ?, model = ?, reasoning_effort = ?,
+SET uid = ?, source = ?, name = ?, base_url = ?, secret_ciphertext = ?, model = ?, reasoning_effort = ?,
     codex_approval_policy = ?, codex_sandbox_mode = ?,
     claude_default_mode = ?, claude_use_sandbox = ?, claude_skip_dangerous_prompt = ?,
     updated_at = ?
 WHERE id = ?`,
 		provider.UID,
+		provider.Source,
 		strings.TrimSpace(provider.Name),
 		strings.TrimSpace(provider.BaseURL),
 		ciphertext,
@@ -339,7 +355,7 @@ func (s *Store) ListActiveProviderIDs() (map[string]int64, error) {
 
 func (s *Store) GetActiveProvider(kind string) (*Provider, error) {
 	row := s.db.QueryRow(`
-SELECT p.id, p.uid, p.kind, p.name, p.base_url, p.secret_ciphertext, p.model, p.reasoning_effort,
+SELECT p.id, p.uid, p.kind, p.source, p.name, p.base_url, p.secret_ciphertext, p.model, p.reasoning_effort,
        p.codex_approval_policy, p.codex_sandbox_mode,
        p.claude_default_mode, p.claude_use_sandbox, p.claude_skip_dangerous_prompt,
        p.last_test_status, p.last_test_message, p.last_test_at, p.created_at, p.updated_at
@@ -580,6 +596,7 @@ func (s *Store) scanProvider(sc scanner) (Provider, error) {
 		&provider.ID,
 		&provider.UID,
 		&provider.Kind,
+		&provider.Source,
 		&provider.Name,
 		&provider.BaseURL,
 		&secretCiphertext,
@@ -606,6 +623,9 @@ func (s *Store) scanProvider(sc scanner) (Provider, error) {
 	}
 
 	provider.Secret = secret
+	if provider.Source == "" {
+		provider.Source = "gateway"
+	}
 	provider.ClaudeUseSandbox = useSandbox == 1
 	provider.ClaudeSkipDangerousPrompt = skipDangerousPrompt == 1
 	provider.LastTestAt = parseTime(lastTestAt)

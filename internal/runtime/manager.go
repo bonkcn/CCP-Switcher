@@ -323,6 +323,7 @@ func readCodexProvider(configPath string, authPath string) (*store.Provider, err
 
 	return &store.Provider{
 		Kind:                "codex",
+		Source:              store.ProviderSourceGateway,
 		BaseURL:             baseURL,
 		Secret:              secret,
 		Model:               stringValue(configData["model"]),
@@ -333,6 +334,10 @@ func readCodexProvider(configPath string, authPath string) (*store.Provider, err
 }
 
 func (m *Manager) applyClaudeProvider(provider store.Provider) error {
+	if provider.Source == store.ProviderSourceOfficial {
+		return m.applyClaudeOfficialProvider(provider)
+	}
+
 	if content, err := os.ReadFile(m.cfg.ClaudeSettingsPath); err == nil {
 		updated, ok, err := updateClaudeSettingsText(content, provider)
 		if err != nil {
@@ -348,7 +353,15 @@ func (m *Manager) applyClaudeProvider(provider store.Provider) error {
 	return m.seedClaudeProvider(provider)
 }
 
+func (m *Manager) applyClaudeOfficialProvider(provider store.Provider) error {
+	return m.seedClaudeOfficialProvider(provider)
+}
+
 func (m *Manager) applyCodexProvider(provider store.Provider) error {
+	if provider.Source == store.ProviderSourceOfficial {
+		return m.applyCodexOfficialProvider(provider)
+	}
+
 	if content, err := os.ReadFile(m.cfg.CodexAuthPath); err == nil {
 		updated, ok, err := updateCodexAuthText(content, provider.Secret)
 		if err != nil {
@@ -384,7 +397,15 @@ func (m *Manager) applyCodexProvider(provider store.Provider) error {
 	return m.seedCodexProvider(provider)
 }
 
+func (m *Manager) applyCodexOfficialProvider(provider store.Provider) error {
+	return m.seedCodexOfficialProvider(provider)
+}
+
 func (m *Manager) seedClaudeProvider(provider store.Provider) error {
+	if provider.Source == store.ProviderSourceOfficial {
+		return m.seedClaudeOfficialProvider(provider)
+	}
+
 	data := make(map[string]any)
 	if content, err := os.ReadFile(m.cfg.ClaudeSettingsPath); err == nil && len(bytes.TrimSpace(content)) > 0 {
 		if err := json.Unmarshal(content, &data); err != nil {
@@ -426,13 +447,43 @@ func (m *Manager) seedClaudeProvider(provider store.Provider) error {
 	return writeAtomic(m.cfg.ClaudeSettingsPath, content, 0o600)
 }
 
+func (m *Manager) seedClaudeOfficialProvider(provider store.Provider) error {
+	if err := m.PrepareClaudeOfficialProvider(provider); err != nil {
+		return err
+	}
+	credentialsPath := m.ClaudeOfficialCredentialsPath(provider)
+	if _, err := os.Stat(credentialsPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return errors.New("官方 Claude 账号尚未登录，请先在 WebUI 中完成浏览器认证")
+		}
+		return fmt.Errorf("read official claude credentials: %w", err)
+	}
+	if err := copyIfExists(m.ClaudeOfficialStatePath(provider), m.ClaudeGlobalStatePath()); err != nil {
+		return err
+	}
+	if err := copyIfExists(credentialsPath, m.ClaudeGlobalCredentialsPath()); err != nil {
+		return err
+	}
+	return copyIfExists(m.ClaudeOfficialSettingsPath(provider), m.cfg.ClaudeSettingsPath)
+}
+
 func (m *Manager) seedCodexProvider(provider store.Provider) error {
+	if provider.Source == store.ProviderSourceOfficial {
+		return m.seedCodexOfficialProvider(provider)
+	}
+
+	return m.seedCodexGatewayProvider(provider)
+}
+
+func (m *Manager) seedCodexGatewayProvider(provider store.Provider) error {
 	configData, err := readTOMLFile(m.cfg.CodexConfigPath)
 	if err != nil {
 		return err
 	}
 
 	configData["model_provider"] = "custom"
+	delete(configData, "cli_auth_credentials_store")
+	delete(configData, "openai_base_url")
 	if provider.Model != "" {
 		configData["model"] = provider.Model
 	}
@@ -465,7 +516,169 @@ func (m *Manager) seedCodexProvider(provider store.Provider) error {
 	return writeAtomic(m.cfg.CodexConfigPath, buf.Bytes(), 0o600)
 }
 
+func (m *Manager) seedCodexOfficialProvider(provider store.Provider) error {
+	if err := m.PrepareCodexOfficialProvider(provider); err != nil {
+		return err
+	}
+	authPath := m.CodexOfficialAuthPath(provider)
+	if _, err := os.Stat(authPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return errors.New("官方 Codex 账号尚未登录，请先在 WebUI 中完成浏览器认证")
+		}
+		return fmt.Errorf("read official codex auth: %w", err)
+	}
+	if err := copyIfExists(authPath, m.cfg.CodexAuthPath); err != nil {
+		return err
+	}
+	return copyIfExists(m.CodexOfficialConfigPath(provider), m.cfg.CodexConfigPath)
+}
+
+func (m *Manager) PrepareCodexOfficialProvider(provider store.Provider) error {
+	return m.writeCodexOfficialConfig(m.CodexOfficialConfigPath(provider), provider)
+}
+
+func (m *Manager) PrepareClaudeOfficialProvider(provider store.Provider) error {
+	return m.writeClaudeOfficialSettings(m.ClaudeOfficialSettingsPath(provider), provider)
+}
+
+func (m *Manager) ClaudeGlobalHome() string {
+	return filepath.Dir(filepath.Dir(m.cfg.ClaudeSettingsPath))
+}
+
+func (m *Manager) ClaudeGlobalConfigDir() string {
+	return filepath.Dir(m.cfg.ClaudeSettingsPath)
+}
+
+func (m *Manager) ClaudeGlobalStatePath() string {
+	return filepath.Join(m.ClaudeGlobalHome(), ".claude.json")
+}
+
+func (m *Manager) ClaudeGlobalCredentialsPath() string {
+	return filepath.Join(m.ClaudeGlobalConfigDir(), ".credentials.json")
+}
+
+func (m *Manager) ClaudeOfficialHome(provider store.Provider) string {
+	return filepath.Join(m.cfg.ClaudeAccountsDir, strings.TrimSpace(provider.UID))
+}
+
+func (m *Manager) ClaudeOfficialConfigDir(provider store.Provider) string {
+	return filepath.Join(m.ClaudeOfficialHome(provider), ".claude")
+}
+
+func (m *Manager) ClaudeOfficialSettingsPath(provider store.Provider) string {
+	return filepath.Join(m.ClaudeOfficialConfigDir(provider), "settings.json")
+}
+
+func (m *Manager) ClaudeOfficialStatePath(provider store.Provider) string {
+	return filepath.Join(m.ClaudeOfficialHome(provider), ".claude.json")
+}
+
+func (m *Manager) ClaudeOfficialCredentialsPath(provider store.Provider) string {
+	return filepath.Join(m.ClaudeOfficialConfigDir(provider), ".credentials.json")
+}
+
+func (m *Manager) CodexOfficialHome(provider store.Provider) string {
+	return filepath.Join(m.cfg.CodexAccountsDir, strings.TrimSpace(provider.UID))
+}
+
+func (m *Manager) CodexOfficialConfigPath(provider store.Provider) string {
+	return filepath.Join(m.CodexOfficialHome(provider), "config.toml")
+}
+
+func (m *Manager) CodexOfficialAuthPath(provider store.Provider) string {
+	return filepath.Join(m.CodexOfficialHome(provider), "auth.json")
+}
+
+func (m *Manager) writeCodexOfficialConfig(path string, provider store.Provider) error {
+	configData, err := readTOMLFile(path)
+	if err != nil {
+		return err
+	}
+
+	configData["cli_auth_credentials_store"] = "file"
+	configData["model_provider"] = "openai"
+	delete(configData, "openai_base_url")
+
+	if provider.Model != "" {
+		configData["model"] = provider.Model
+	}
+	if provider.ReasoningEffort != "" {
+		configData["model_reasoning_effort"] = provider.ReasoningEffort
+	}
+	if provider.CodexApprovalPolicy != "" {
+		configData["approval_policy"] = provider.CodexApprovalPolicy
+	}
+	if provider.CodexSandboxMode != "" {
+		configData["sandbox_mode"] = provider.CodexSandboxMode
+	}
+
+	modelProviders := nestedMap(configData, "model_providers")
+	delete(modelProviders, "custom")
+	if len(modelProviders) == 0 {
+		delete(configData, "model_providers")
+	}
+
+	var buf bytes.Buffer
+	encoder := toml.NewEncoder(&buf)
+	if err := encoder.Encode(configData); err != nil {
+		return fmt.Errorf("encode official codex config: %w", err)
+	}
+	return writeAtomic(path, buf.Bytes(), 0o600)
+}
+
+func (m *Manager) writeClaudeOfficialSettings(path string, provider store.Provider) error {
+	data := make(map[string]any)
+	if content, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(content)) > 0 {
+		if err := json.Unmarshal(content, &data); err != nil {
+			return fmt.Errorf("parse existing official claude settings: %w", err)
+		}
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read existing official claude settings: %w", err)
+	}
+
+	env := ensureNestedMap(data, "env")
+	delete(env, "ANTHROPIC_BASE_URL")
+	delete(env, "ANTHROPIC_AUTH_TOKEN")
+	env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+	env["CLAUDE_CODE_ATTRIBUTION_HEADER"] = "0"
+	if provider.ClaudeUseSandbox || provider.ClaudeDefaultMode == "bypassPermissions" {
+		env["IS_SANDBOX"] = "1"
+	} else {
+		delete(env, "IS_SANDBOX")
+	}
+
+	permissions := ensureNestedMap(data, "permissions")
+	if provider.ClaudeDefaultMode != "" {
+		permissions["defaultMode"] = provider.ClaudeDefaultMode
+	}
+	if provider.Model != "" {
+		data["model"] = provider.Model
+	}
+	if provider.ClaudeSkipDangerousPrompt {
+		data["skipDangerousModePermissionPrompt"] = true
+	} else {
+		delete(data, "skipDangerousModePermissionPrompt")
+	}
+
+	content, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal official claude settings: %w", err)
+	}
+	content = append(content, '\n')
+	return writeAtomic(path, content, 0o600)
+}
+
 func (m *Manager) inspectClaudeManagedStatus() ManagedConfigStatus {
+	active, err := m.store.GetActiveProvider("claude")
+	if err == nil && active != nil && active.Source == store.ProviderSourceOfficial {
+		return ManagedConfigStatus{
+			Kind:       "claude",
+			Compatible: true,
+			Mode:       "官方账号切换",
+			Details:    "当前 Claude Code 通过官方订阅账号托管。切换时会同步该账号独立 HOME 下的 .claude.json、.claude/.credentials.json 与 settings.json 到全局 Claude 目录。",
+		}
+	}
+
 	content, err := os.ReadFile(m.cfg.ClaudeSettingsPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return ManagedConfigStatus{
@@ -499,6 +712,16 @@ func (m *Manager) inspectClaudeManagedStatus() ManagedConfigStatus {
 }
 
 func (m *Manager) inspectCodexManagedStatus() ManagedConfigStatus {
+	active, err := m.store.GetActiveProvider("codex")
+	if err == nil && active != nil && active.Source == store.ProviderSourceOfficial {
+		return ManagedConfigStatus{
+			Kind:       "codex",
+			Compatible: true,
+			Mode:       "官方账号切换",
+			Details:    "当前 Codex 通过官方订阅账号托管。切换时会同步该账号独立 CODEX_HOME 下的 auth.json 与 config.toml 到全局 ~/.codex。",
+		}
+	}
+
 	configContent, configErr := os.ReadFile(m.cfg.CodexConfigPath)
 	authContent, authErr := os.ReadFile(m.cfg.CodexAuthPath)
 	if errors.Is(configErr, os.ErrNotExist) || errors.Is(authErr, os.ErrNotExist) {
@@ -535,7 +758,7 @@ func (m *Manager) backupProviderFiles(kind string) (string, error) {
 	var paths []string
 	switch kind {
 	case "claude":
-		paths = []string{m.cfg.ClaudeSettingsPath}
+		paths = []string{m.cfg.ClaudeSettingsPath, m.ClaudeGlobalStatePath(), m.ClaudeGlobalCredentialsPath()}
 	case "codex":
 		paths = []string{m.cfg.CodexConfigPath, m.cfg.CodexAuthPath}
 	default:
@@ -589,6 +812,10 @@ func (m *Manager) backupProviderFiles(kind string) (string, error) {
 }
 
 func (m *Manager) fetchCodexModels(provider store.Provider) ModelCatalogResult {
+	if provider.Source == store.ProviderSourceOfficial {
+		return ModelCatalogResult{Status: "error", Message: "官方订阅账号不走 Base URL 模型探测，请先完成登录并直接切换使用。"}
+	}
+
 	endpoint, err := joinEndpoint(provider.BaseURL, "models")
 	if err != nil {
 		return ModelCatalogResult{Status: "error", Message: "invalid base URL: " + err.Error()}
@@ -622,6 +849,10 @@ func (m *Manager) fetchCodexModels(provider store.Provider) ModelCatalogResult {
 }
 
 func (m *Manager) fetchClaudeModels(provider store.Provider) ModelCatalogResult {
+	if provider.Source == store.ProviderSourceOfficial {
+		return ModelCatalogResult{Status: "error", Message: "官方订阅账号不走 Base URL 模型探测，请先完成登录并直接切换使用。"}
+	}
+
 	endpoint, err := joinEndpoint(provider.BaseURL, "models")
 	if err != nil {
 		return ModelCatalogResult{Status: "error", Message: "invalid base URL: " + err.Error()}
@@ -686,6 +917,10 @@ func (m *Manager) fetchClaudeModels(provider store.Provider) ModelCatalogResult 
 }
 
 func (m *Manager) testCodexModelAPI(provider store.Provider, model string) TestResult {
+	if provider.Source == store.ProviderSourceOfficial {
+		return TestResult{Status: "error", Message: "官方订阅账号不走自定义 responses Base URL 探测。"}
+	}
+
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return TestResult{Status: "error", Message: "set a model before running the model call test"}
@@ -738,6 +973,10 @@ func (m *Manager) testCodexModelAPI(provider store.Provider, model string) TestR
 }
 
 func (m *Manager) testCodexModelCLI(provider store.Provider, model string) TestResult {
+	if provider.Source == store.ProviderSourceOfficial {
+		return TestResult{Status: "error", Message: "官方订阅账号无需 CLI 沙箱探测，请改用登录状态检查后直接切换。"}
+	}
+
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return TestResult{Status: "error", Message: "set a model before running the model call test"}
@@ -822,6 +1061,10 @@ func (m *Manager) testCodexModelCLI(provider store.Provider, model string) TestR
 }
 
 func (m *Manager) testClaudeModelAPI(provider store.Provider, model string) TestResult {
+	if provider.Source == store.ProviderSourceOfficial {
+		return TestResult{Status: "error", Message: "官方订阅账号不走自定义 Base URL 探测。"}
+	}
+
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return TestResult{Status: "error", Message: "set a model before running the model call test"}
@@ -904,6 +1147,10 @@ func (m *Manager) testClaudeModelAPI(provider store.Provider, model string) Test
 }
 
 func (m *Manager) testClaudeModelCLI(provider store.Provider, model string) TestResult {
+	if provider.Source == store.ProviderSourceOfficial {
+		return TestResult{Status: "error", Message: "官方订阅账号无需 CLI 沙箱探测，请改用登录状态检查后直接切换。"}
+	}
+
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return TestResult{Status: "error", Message: "set a model before running the model call test"}
@@ -1018,6 +1265,8 @@ func updateCodexConfigText(content []byte, provider store.Provider) ([]byte, boo
 	if !replaceTOMLStringInSection(lines, "", "model_provider", "custom") {
 		return content, false, nil
 	}
+	_ = removeTOMLKeyInSection(lines, "", "cli_auth_credentials_store")
+	_ = removeTOMLKeyInSection(lines, "", "openai_base_url")
 	if !replaceTOMLStringInSection(lines, "model_providers.custom", "base_url", provider.BaseURL) {
 		return content, false, nil
 	}
@@ -1408,6 +1657,25 @@ func replaceTOMLStringInSection(lines []string, section string, key string, valu
 		updated, ok := replaceTOMLStringLine(line, key, value)
 		if ok {
 			lines[index] = updated + ending
+			return true
+		}
+	}
+	return false
+}
+
+func removeTOMLKeyInSection(lines []string, section string, key string) bool {
+	currentSection := ""
+	for index, rawLine := range lines {
+		line, _ := splitLineEnding(rawLine)
+		if nextSection, ok := parseTOMLSection(line); ok {
+			currentSection = nextSection
+			continue
+		}
+		if currentSection != section {
+			continue
+		}
+		if tomlLineHasKey(line, key) {
+			lines[index] = ""
 			return true
 		}
 	}

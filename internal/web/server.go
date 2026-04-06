@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bonkcn/ccp-switcher/internal/app"
@@ -39,38 +40,56 @@ type Server struct {
 	repoDir  string
 
 	syncStop chan struct{} // closed to stop auto-sync goroutine
+
+	codexLoginMu               sync.Mutex
+	codexLoginSessions         map[int64]*codexOfficialLoginSession
+	codexLoginActiveProviderID int64
+
+	claudeLoginMu               sync.Mutex
+	claudeLoginSessions         map[int64]*claudeOfficialLoginSession
+	claudeLoginActiveProviderID int64
 }
 
 type viewData struct {
-	Title           string
-	SiteName        string
-	CurrentPath     string
-	ContentTemplate string
-	Content         template.HTML
-	Notice          string
-	Error           string
-	Provider        store.Provider
-	Providers       []store.Provider
-	ClaudeProviders []store.Provider
-	CodexProviders  []store.Provider
-	ActiveIDs       map[string]int64
-	ActiveClaude    *store.Provider
-	ActiveCodex     *store.Provider
-	ClaudeManaged   runtimecfg.ManagedConfigStatus
-	CodexManaged    runtimecfg.ManagedConfigStatus
-	Logs            []store.SwitchLog
-	GeneratedToken  string
-	BootstrapPath   string
-	ListenAddr      string
-	ClaudePath      string
-	CodexConfigPath string
-	CodexAuthPath   string
-	Probe           *providerProbeView
-	Version         *versionStatusView
-	SyncConfig      cloudsync.Config
-	SyncStatus      cloudsync.SyncStatus
-	TLSEnabled      bool
-	TLSDomain       string
+	Title                       string
+	SiteName                    string
+	CurrentPath                 string
+	ContentTemplate             string
+	Content                     template.HTML
+	Notice                      string
+	Error                       string
+	Provider                    store.Provider
+	Providers                   []store.Provider
+	ClaudeProviders             []store.Provider
+	CodexProviders              []store.Provider
+	ClaudeGatewayProviders      []store.Provider
+	ClaudeOfficialProviders     []store.Provider
+	CodexGatewayProviders       []store.Provider
+	CodexOfficialProviders      []store.Provider
+	ClaudeOfficialStates        map[int64]ClaudeOfficialAccountStateView
+	CodexOfficialStates         map[int64]CodexOfficialAccountStateView
+	ClaudeOfficialLoginProvider *store.Provider
+	ClaudeOfficialLoginState    *ClaudeOfficialAccountStateView
+	CodexOfficialLoginProvider  *store.Provider
+	CodexOfficialLoginState     *CodexOfficialAccountStateView
+	ActiveIDs                   map[string]int64
+	ActiveClaude                *store.Provider
+	ActiveCodex                 *store.Provider
+	ClaudeManaged               runtimecfg.ManagedConfigStatus
+	CodexManaged                runtimecfg.ManagedConfigStatus
+	Logs                        []store.SwitchLog
+	GeneratedToken              string
+	BootstrapPath               string
+	ListenAddr                  string
+	ClaudePath                  string
+	CodexConfigPath             string
+	CodexAuthPath               string
+	Probe                       *providerProbeView
+	Version                     *versionStatusView
+	SyncConfig                  cloudsync.Config
+	SyncStatus                  cloudsync.SyncStatus
+	TLSEnabled                  bool
+	TLSDomain                   string
 }
 
 type providerProbeView struct {
@@ -89,6 +108,7 @@ func NewServer(cfg app.Config, st *store.Store, manager *runtimecfg.Manager, log
 		"formatTime":      formatTime,
 		"isActive":        isActive,
 		"kindLabel":       kindLabel,
+		"sourceLabel":     sourceLabel,
 		"optionalLabel":   optionalLabel,
 		"statusClass":     statusClass,
 		"testStatusLabel": testStatusLabel,
@@ -96,6 +116,8 @@ func NewServer(cfg app.Config, st *store.Store, manager *runtimecfg.Manager, log
 		"hasMoreText":     hasMoreText,
 		"truncateText":    truncateText,
 		"providerCount":   providerCount,
+		"isGateway":       isGatewayProvider,
+		"isOfficial":      isOfficialProvider,
 	}).ParseFS(assets, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
@@ -130,6 +152,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /providers/{id}/edit", s.authenticated(s.handleProviderEdit))
 	mux.HandleFunc("POST /providers/{id}", s.authenticated(s.handleProviderUpdate))
 	mux.HandleFunc("POST /providers/{id}/delete", s.authenticated(s.handleProviderDelete))
+	mux.HandleFunc("POST /providers/{id}/official/status", s.authenticated(s.handleOfficialProviderStatus))
+	mux.HandleFunc("POST /providers/{id}/official/login/start", s.authenticated(s.handleOfficialCodexLoginStart))
+	mux.HandleFunc("POST /providers/{id}/official/login/complete", s.authenticated(s.handleOfficialCodexLoginComplete))
+	mux.HandleFunc("POST /providers/{id}/official/login/cancel", s.authenticated(s.handleOfficialCodexLoginCancel))
 	mux.HandleFunc("POST /providers/{id}/test/connectivity", s.authenticated(s.handleTestConnectivity))
 	mux.HandleFunc("POST /providers/{id}/probe/models", s.authenticated(s.handleProbeModels))
 	mux.HandleFunc("POST /providers/{id}/probe/model", s.authenticated(s.handleProbeSaveModel))
@@ -275,6 +301,13 @@ func (s *Server) handleProviderNew(w http.ResponseWriter, r *http.Request) {
 	if kind != "claude" && kind != "codex" {
 		kind = "claude"
 	}
+	source := strings.TrimSpace(r.URL.Query().Get("source"))
+	if source == "" {
+		source = store.ProviderSourceGateway
+	}
+	if source != store.ProviderSourceGateway && source != store.ProviderSourceOfficial {
+		source = store.ProviderSourceGateway
+	}
 
 	s.render(w, http.StatusOK, viewData{
 		Title:           "New Provider",
@@ -282,6 +315,7 @@ func (s *Server) handleProviderNew(w http.ResponseWriter, r *http.Request) {
 		ContentTemplate: "provider_form.html",
 		Provider: store.Provider{
 			Kind:              kind,
+			Source:            source,
 			ClaudeDefaultMode: "default",
 		},
 	})
@@ -368,6 +402,121 @@ func (s *Server) handleProviderDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.redirectWithMessage(w, r, "/providers", "供应商配置已删除", "")
+}
+
+func (s *Server) handleOfficialProviderStatus(w http.ResponseWriter, r *http.Request) {
+	provider, err := s.store.GetProvider(mustID(r.PathValue("id")))
+	if err != nil {
+		s.renderError(w, http.StatusNotFound, "provider not found")
+		return
+	}
+	if provider.Source != store.ProviderSourceOfficial {
+		s.redirectWithMessage(w, r, "/providers", "", "只有官方账号支持登录状态检查")
+		return
+	}
+	var status string
+	var message string
+	switch provider.Kind {
+	case "codex":
+		status, message = s.checkCodexOfficialLogin(provider)
+	case "claude":
+		status, message = s.checkClaudeOfficialLogin(provider)
+	default:
+		s.redirectWithMessage(w, r, "/providers", "", "不支持的官方账号类型")
+		return
+	}
+	_ = s.store.RecordTestResult(provider.ID, status, message)
+	notice := provider.Name + " 官方账号登录状态已更新"
+	if status != "ok" {
+		s.renderProvidersPage(w, r, http.StatusOK, nil, "", notice+": "+message)
+		return
+	}
+	s.renderProvidersPage(w, r, http.StatusOK, nil, notice, "")
+}
+
+func (s *Server) handleOfficialCodexLoginStart(w http.ResponseWriter, r *http.Request) {
+	provider, err := s.store.GetProvider(mustID(r.PathValue("id")))
+	if err != nil {
+		s.renderError(w, http.StatusNotFound, "provider not found")
+		return
+	}
+	var startErr error
+	var notice string
+	switch provider.Kind {
+	case "codex":
+		startErr = s.startCodexOfficialLogin(provider)
+		notice = provider.Name + " 的官方登录流程已启动，请在本地浏览器完成授权后，把完整回调链接粘贴回来。"
+	case "claude":
+		startErr = s.startClaudeOfficialLogin(provider)
+		notice = provider.Name + " 的官方登录流程已启动，请在本地浏览器完成授权后，把授权码粘贴回来。"
+	default:
+		startErr = fmt.Errorf("不支持的官方账号类型")
+	}
+	if startErr != nil {
+		s.renderProvidersPage(w, r, http.StatusBadRequest, nil, "", startErr.Error())
+		return
+	}
+	s.renderProvidersPage(w, r, http.StatusOK, nil, notice, "")
+}
+
+func (s *Server) handleOfficialCodexLoginComplete(w http.ResponseWriter, r *http.Request) {
+	provider, err := s.store.GetProvider(mustID(r.PathValue("id")))
+	if err != nil {
+		s.renderError(w, http.StatusNotFound, "provider not found")
+		return
+	}
+	var completeErr error
+	var status string
+	var message string
+	switch provider.Kind {
+	case "codex":
+		callbackURL := strings.TrimSpace(r.FormValue("callback_url"))
+		if callbackURL == "" {
+			s.renderProvidersPage(w, r, http.StatusBadRequest, nil, "", "请粘贴浏览器最终跳转失败页里的完整回调链接")
+			return
+		}
+		completeErr = s.completeCodexOfficialLogin(provider, callbackURL)
+		if completeErr == nil {
+			status, message = s.checkCodexOfficialLogin(provider)
+		}
+	case "claude":
+		authCode := strings.TrimSpace(r.FormValue("auth_code"))
+		if authCode == "" {
+			s.renderProvidersPage(w, r, http.StatusBadRequest, nil, "", "请粘贴 Claude 授权页返回的授权码")
+			return
+		}
+		completeErr = s.completeClaudeOfficialLogin(provider, authCode)
+		if completeErr == nil {
+			status, message = s.checkClaudeOfficialLogin(provider)
+		}
+	default:
+		completeErr = fmt.Errorf("不支持的官方账号类型")
+	}
+	if completeErr != nil {
+		s.renderProvidersPage(w, r, http.StatusBadRequest, nil, "", completeErr.Error())
+		return
+	}
+	_ = s.store.RecordTestResult(provider.ID, status, message)
+	if status != "ok" {
+		s.renderProvidersPage(w, r, http.StatusOK, nil, "", provider.Name+" 已写入登录态，但登录状态检查失败: "+message)
+		return
+	}
+	s.renderProvidersPage(w, r, http.StatusOK, nil, provider.Name+" 官方账号登录完成", "")
+}
+
+func (s *Server) handleOfficialCodexLoginCancel(w http.ResponseWriter, r *http.Request) {
+	provider, err := s.store.GetProvider(mustID(r.PathValue("id")))
+	if err != nil {
+		s.renderError(w, http.StatusNotFound, "provider not found")
+		return
+	}
+	switch provider.Kind {
+	case "codex":
+		s.cancelCodexOfficialLogin(provider.ID)
+	case "claude":
+		s.cancelClaudeOfficialLogin(provider.ID)
+	}
+	s.renderProvidersPage(w, r, http.StatusOK, nil, "官方账号登录流程已取消", "")
 }
 
 func (s *Server) handleTestConnectivity(w http.ResponseWriter, r *http.Request) {
@@ -594,44 +743,9 @@ func (s *Server) handleProvidersImportSettings(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) handleFullExport(w http.ResponseWriter, r *http.Request) {
-	providers, err := s.store.ListProviders("")
+	data, err := s.exportFullBackupJSON()
 	if err != nil {
-		s.renderError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	activeIDs, err := s.store.ListActiveProviderIDs()
-	if err != nil {
-		s.renderError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	syncCfg, _ := cloudsync.LoadConfig(s.store)
-	siteName, _ := s.store.GetSetting("site_name")
-
-	providerPayload := buildProviderTransferFile(providers, activeIDs)
-
-	fullPayload := map[string]any{
-		"type":        "ccp-switcher/full",
-		"version":     1,
-		"exported_at": time.Now().UTC().Format(time.RFC3339),
-		"providers":   providerPayload,
-		"sync_config": map[string]any{
-			"type":     syncCfg.Type,
-			"url":      syncCfg.URL,
-			"bucket":   syncCfg.Bucket,
-			"region":   syncCfg.Region,
-			"key_id":   syncCfg.KeyID,
-			"path":     syncCfg.Path,
-			"auto":     syncCfg.Auto,
-			"interval": syncCfg.Interval,
-		},
-		"site_settings": map[string]any{
-			"site_name": siteName,
-		},
-	}
-
-	data, err := json.MarshalIndent(fullPayload, "", "  ")
-	if err != nil {
-		s.renderError(w, http.StatusInternalServerError, "导出 JSON 失败")
+		s.renderError(w, http.StatusInternalServerError, "导出 JSON 失败: "+err.Error())
 		return
 	}
 
@@ -669,78 +783,23 @@ func (s *Server) handleFullImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var fullPayload map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fullPayload); err != nil {
-		s.redirectWithMessage(w, r, "/settings", "", "导入文件不是合法 JSON: "+err.Error())
+	payload, err := decodeAnyBackup(data)
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", err.Error())
 		return
 	}
 
-	var messages []string
-
-	// Import providers
-	if raw, ok := fullPayload["providers"]; ok {
-		var providerPayload providerTransferFile
-		if err := json.Unmarshal(raw, &providerPayload); err == nil {
-			if err := validateProviderTransfer(&providerPayload); err == nil {
-				result, err := s.importProviderTransfer(providerPayload, r.FormValue("restore_active") == "on")
-				if err != nil {
-					messages = append(messages, "供应商导入异常: "+err.Error())
-				} else {
-					messages = append(messages, result.summary())
-				}
-			}
-		}
+	result, err := s.importFullBackup(payload, r.FormValue("restore_active") == "on")
+	if err != nil {
+		s.redirectWithMessage(w, r, "/settings", "", err.Error())
+		return
 	}
 
-	// Import sync config
-	if raw, ok := fullPayload["sync_config"]; ok {
-		var syncMap map[string]any
-		if err := json.Unmarshal(raw, &syncMap); err == nil {
-			cfg := cloudsync.Config{
-				Type:   stringFromMap(syncMap, "type"),
-				URL:    stringFromMap(syncMap, "url"),
-				Bucket: stringFromMap(syncMap, "bucket"),
-				Region: stringFromMap(syncMap, "region"),
-				KeyID:  stringFromMap(syncMap, "key_id"),
-				Path:   stringFromMap(syncMap, "path"),
-			}
-			if v, ok := syncMap["auto"]; ok {
-				if b, ok := v.(bool); ok {
-					cfg.Auto = b
-				}
-			}
-			if v, ok := syncMap["interval"]; ok {
-				if f, ok := v.(float64); ok {
-					cfg.Interval = int(f)
-				}
-			}
-			if cfg.Interval <= 0 {
-				cfg.Interval = 30
-			}
-			existing, _ := cloudsync.LoadConfig(s.store)
-			cfg.Secret = existing.Secret
-			if err := cloudsync.SaveConfig(s.store, cfg); err == nil {
-				s.restartAutoSync()
-				messages = append(messages, "云同步配置已恢复")
-			}
-		}
+	summary := result.summary()
+	if summary == "" {
+		summary = "导入完成，文件中没有可识别的数据"
 	}
-
-	// Import site settings
-	if raw, ok := fullPayload["site_settings"]; ok {
-		var siteMap map[string]any
-		if err := json.Unmarshal(raw, &siteMap); err == nil {
-			if name := stringFromMap(siteMap, "site_name"); name != "" {
-				_ = s.store.SetSetting("site_name", name)
-				messages = append(messages, "站点设置已恢复")
-			}
-		}
-	}
-
-	if len(messages) == 0 {
-		messages = append(messages, "导入完成，文件中没有可识别的数据")
-	}
-	s.redirectWithMessage(w, r, "/settings", strings.Join(messages, "；"), "")
+	s.redirectWithMessage(w, r, "/settings", summary, "")
 }
 
 func (s *Server) handlePasswordUpdate(w http.ResponseWriter, r *http.Request) {
@@ -968,20 +1027,73 @@ func (s *Server) providersViewData(notice string, errorMessage string, probe *pr
 		return viewData{}, err
 	}
 	claudeProviders, codexProviders := splitProvidersByKind(providers)
+	claudeGatewayProviders, claudeOfficialProviders, codexGatewayProviders, codexOfficialProviders := splitProvidersByKindAndSource(providers)
+	claudeOfficialStates := make(map[int64]ClaudeOfficialAccountStateView, len(claudeOfficialProviders))
+	for _, provider := range claudeOfficialProviders {
+		claudeOfficialStates[provider.ID] = s.claudeOfficialAccountState(provider)
+	}
+	codexOfficialStates := make(map[int64]CodexOfficialAccountStateView, len(codexOfficialProviders))
+	for _, provider := range codexOfficialProviders {
+		codexOfficialStates[provider.ID] = s.codexOfficialAccountState(provider)
+	}
+	claudeLoginProvider, claudeLoginState := currentClaudeOfficialLoginModal(claudeOfficialProviders, claudeOfficialStates)
+	loginProvider, loginState := currentCodexOfficialLoginModal(codexOfficialProviders, codexOfficialStates)
 	return viewData{
-		Title:           "Providers",
-		CurrentPath:     "/providers",
-		ContentTemplate: "providers.html",
-		Notice:          notice,
-		Error:           errorMessage,
-		Providers:       providers,
-		ClaudeProviders: claudeProviders,
-		CodexProviders:  codexProviders,
-		ActiveIDs:       activeIDs,
-		ActiveClaude:    activeClaude,
-		ActiveCodex:     activeCodex,
-		Probe:           probe,
+		Title:                       "Providers",
+		CurrentPath:                 "/providers",
+		ContentTemplate:             "providers.html",
+		Notice:                      notice,
+		Error:                       errorMessage,
+		Providers:                   providers,
+		ClaudeProviders:             claudeProviders,
+		CodexProviders:              codexProviders,
+		ClaudeGatewayProviders:      claudeGatewayProviders,
+		ClaudeOfficialProviders:     claudeOfficialProviders,
+		CodexGatewayProviders:       codexGatewayProviders,
+		CodexOfficialProviders:      codexOfficialProviders,
+		ClaudeOfficialStates:        claudeOfficialStates,
+		CodexOfficialStates:         codexOfficialStates,
+		ClaudeOfficialLoginProvider: claudeLoginProvider,
+		ClaudeOfficialLoginState:    claudeLoginState,
+		CodexOfficialLoginProvider:  loginProvider,
+		CodexOfficialLoginState:     loginState,
+		ActiveIDs:                   activeIDs,
+		ActiveClaude:                activeClaude,
+		ActiveCodex:                 activeCodex,
+		Probe:                       probe,
 	}, nil
+}
+
+func currentCodexOfficialLoginModal(providers []store.Provider, states map[int64]CodexOfficialAccountStateView) (*store.Provider, *CodexOfficialAccountStateView) {
+	for _, provider := range providers {
+		state, ok := states[provider.ID]
+		if !ok {
+			continue
+		}
+		if !state.LoginInProgress && !state.AwaitingCallback {
+			continue
+		}
+		providerCopy := provider
+		stateCopy := state
+		return &providerCopy, &stateCopy
+	}
+	return nil, nil
+}
+
+func currentClaudeOfficialLoginModal(providers []store.Provider, states map[int64]ClaudeOfficialAccountStateView) (*store.Provider, *ClaudeOfficialAccountStateView) {
+	for _, provider := range providers {
+		state, ok := states[provider.ID]
+		if !ok {
+			continue
+		}
+		if !state.LoginInProgress && !state.AwaitingCode {
+			continue
+		}
+		providerCopy := provider
+		stateCopy := state
+		return &providerCopy, &stateCopy
+	}
+	return nil, nil
 }
 
 func (s *Server) isAuthenticated(r *http.Request) bool {
@@ -1047,6 +1159,10 @@ func (s *Server) redirectWithMessage(w http.ResponseWriter, r *http.Request, pat
 func providerFromRequest(r *http.Request, existing store.Provider) (store.Provider, error) {
 	provider := existing
 	provider.Kind = strings.TrimSpace(r.FormValue("kind"))
+	provider.Source = strings.TrimSpace(r.FormValue("source"))
+	if provider.Source == "" {
+		provider.Source = store.ProviderSourceGateway
+	}
 	provider.Name = strings.TrimSpace(r.FormValue("name"))
 	provider.BaseURL = r.FormValue("base_url")
 	if secret := strings.TrimSpace(r.FormValue("secret")); secret != "" {
@@ -1121,6 +1237,15 @@ func kindLabel(kind string) string {
 		return "Codex"
 	default:
 		return kind
+	}
+}
+
+func sourceLabel(source string) string {
+	switch strings.TrimSpace(source) {
+	case store.ProviderSourceOfficial:
+		return "官方"
+	default:
+		return "中转站"
 	}
 }
 
@@ -1215,6 +1340,35 @@ func splitProvidersByKind(providers []store.Provider) ([]store.Provider, []store
 		}
 	}
 	return claudeProviders, codexProviders
+}
+
+func splitProvidersByKindAndSource(providers []store.Provider) ([]store.Provider, []store.Provider, []store.Provider, []store.Provider) {
+	var claudeGateway []store.Provider
+	var claudeOfficial []store.Provider
+	var codexGateway []store.Provider
+	var codexOfficial []store.Provider
+
+	for _, provider := range providers {
+		switch {
+		case provider.Kind == "claude" && provider.Source == store.ProviderSourceOfficial:
+			claudeOfficial = append(claudeOfficial, provider)
+		case provider.Kind == "claude":
+			claudeGateway = append(claudeGateway, provider)
+		case provider.Kind == "codex" && provider.Source == store.ProviderSourceOfficial:
+			codexOfficial = append(codexOfficial, provider)
+		case provider.Kind == "codex":
+			codexGateway = append(codexGateway, provider)
+		}
+	}
+	return claudeGateway, claudeOfficial, codexGateway, codexOfficial
+}
+
+func isGatewayProvider(provider store.Provider) bool {
+	return strings.TrimSpace(provider.Source) != store.ProviderSourceOfficial
+}
+
+func isOfficialProvider(provider store.Provider) bool {
+	return strings.TrimSpace(provider.Source) == store.ProviderSourceOfficial
 }
 
 func newProviderProbeView(provider store.Provider, testBaseURL string, selectedModel string, models []string) *providerProbeView {

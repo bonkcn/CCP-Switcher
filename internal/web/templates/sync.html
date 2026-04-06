@@ -4,7 +4,7 @@
     云端数据同步
     <div class="tooltip-wrap bottom-left">
       <span class="tooltip-icon">i</span>
-      <div class="tooltip-content">将供应商配置同步到 WebDAV 或 S3 兼容存储，支持多设备间共享。数据包含明文密钥，请确保远端存储安全。</div>
+      <div class="tooltip-content">将与“全站备份数据”相同的快照同步到 WebDAV 或 S3 兼容存储，包含供应商、当前生效引用、云同步配置与站点配置。数据包含明文密钥，请确保远端存储安全。</div>
     </div>
   </h2>
   {{if or (not .SyncStatus.LastPushAt.IsZero) (not .SyncStatus.LastPullAt.IsZero)}}

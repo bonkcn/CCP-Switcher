@@ -1,26 +1,28 @@
 {{define "providers.html"}}
 <div class="provider-tabs">
-  <button class="provider-tab active" data-tab="codex">Codex</button>
-  <button class="provider-tab" data-tab="claude">Claude Code</button>
+  <button class="provider-tab active" data-tab="codex-gateway">Codex 中转站</button>
+  <button class="provider-tab" data-tab="codex-official">Codex 官方</button>
+  <button class="provider-tab" data-tab="claude-gateway">Claude Code 中转站</button>
+  <button class="provider-tab" data-tab="claude-official">Claude Code 官方</button>
 </div>
 
-<section class="provider-section provider-tab-panel active" data-tab-panel="codex">
+<section class="provider-section provider-tab-panel active" data-tab-panel="codex-gateway">
   <div class="section-head">
     <div style="display:flex;align-items:center;gap:8px;">
-      <h2 style="margin:0;">Codex 供应商</h2>
+      <h2 style="margin:0;">Codex 中转站</h2>
       <div class="tooltip-wrap right">
         <span class="tooltip-icon">i</span>
-        <div class="tooltip-content">配置将应用至 <code>~/.codex/config.toml</code> 与 <code>auth.json</code>。探测前需选定模型。</div>
+        <div class="tooltip-content">适用于第三方 OpenAI 兼容中转。切换时会写入 <code>~/.codex/config.toml</code> 与 <code>auth.json</code>，并把 provider 固定到 <code>custom</code>。</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
-      <div class="section-badge">当前生效: <strong>{{if .ActiveCodex}}{{.ActiveCodex.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .CodexProviders}}</div>
-      <a class="button small" href="/providers/new?kind=codex">新增 Codex</a>
+      <div class="section-badge">当前生效: <strong>{{if and .ActiveCodex (isGateway .ActiveCodex)}}{{.ActiveCodex.Name}}{{else}}未选中本组{{end}}</strong> · {{providerCount .CodexGatewayProviders}}</div>
+      <a class="button small" href="/providers/new?kind=codex&source=gateway">新增 Codex 中转</a>
     </div>
   </div>
 
   <div class="provider-list">
-    {{range .CodexProviders}}
+    {{range .CodexGatewayProviders}}
     <article class="provider-row {{if isActive $.ActiveIDs .}}provider-row-active{{end}}">
       <div class="row-main">
         <div class="row-header">
@@ -60,28 +62,95 @@
       </div>
     </article>
     {{else}}
-    <article class="provider-empty">暂无 Codex 供应商</article>
+    <article class="provider-empty">暂无 Codex 中转配置</article>
     {{end}}
   </div>
 </section>
 
-<section class="provider-section provider-tab-panel" data-tab-panel="claude">
+<section class="provider-section provider-tab-panel" data-tab-panel="codex-official">
   <div class="section-head">
     <div style="display:flex;align-items:center;gap:8px;">
-      <h2 style="margin:0;">Claude Code 供应商</h2>
+      <h2 style="margin:0;">Codex 官方订阅账号</h2>
+      <div class="tooltip-wrap right">
+        <span class="tooltip-icon">i</span>
+        <div class="tooltip-content">每个官方账号都会分配独立 <code>CODEX_HOME</code>。登录流程由 WebUI 启动，用户只需在本地浏览器完成授权，再把最终回调链接粘贴回来。</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="section-badge">当前生效: <strong>{{if and .ActiveCodex (isOfficial .ActiveCodex)}}{{.ActiveCodex.Name}}{{else}}未选中本组{{end}}</strong> · {{providerCount .CodexOfficialProviders}}</div>
+      <a class="button small" href="/providers/new?kind=codex&source=official">新增官方账号</a>
+    </div>
+  </div>
+
+  <div class="provider-list">
+    {{range .CodexOfficialProviders}}
+    {{$state := index $.CodexOfficialStates .ID}}
+    <article class="provider-row {{if isActive $.ActiveIDs .}}provider-row-active{{end}}">
+      <div class="row-main">
+        <div class="row-header">
+          <div class="row-title">
+            <strong>{{.Name}}</strong>
+            {{if isActive $.ActiveIDs .}}<span class="pill active">当前使用</span>{{end}}
+            {{if $state.AuthExists}}<span class="pill status-ok">已写入认证</span>{{else}}<span class="pill status-neutral">未登录</span>{{end}}
+          </div>
+          <code class="row-url">{{truncateText $state.HomePath 84}}</code>
+        </div>
+        <div class="row-meta">
+          <span class="meta-pill">模型: {{if .Model}}{{.Model}}{{else}}跟随该账号配置{{end}}</span>
+          <span class="meta-pill">推理: {{optionalLabel .ReasoningEffort "跟随该账号配置"}}</span>
+          <span class="meta-pill">审批: {{optionalLabel .CodexApprovalPolicy "跟随该账号配置"}}</span>
+          <span class="meta-pill">沙箱: {{optionalLabel .CodexSandboxMode "跟随该账号配置"}}</span>
+          <span class="meta-pill">隔离目录: {{if $state.AuthExists}}已准备{{else}}待登录{{end}}</span>
+        </div>
+        <div class="row-result" style="display:flex;align-items:center;gap:6px;font-size:11px;">
+          <span class="muted">登录检查</span>
+          <span class="row-result-brief">{{testStatusLabel .LastTestStatus .LastTestMessage}}</span>
+          {{if .LastTestMessage}}
+          <div class="tooltip-wrap">
+             <span class="tooltip-icon" style="cursor:zoom-in;">+</span>
+             <div class="tooltip-content" style="white-space:pre-wrap;max-width:420px;">{{.LastTestMessage}}</div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      <div class="row-actions">
+        <form method="post" action="/providers/{{.ID}}/official/status"><button class="button ghost small" type="submit">检查登录</button></form>
+        {{if $state.CanCancelLogin}}
+        <form method="post" action="/providers/{{.ID}}/official/login/cancel"><button class="button ghost small" type="submit">取消登录</button></form>
+        {{else}}
+        <form method="post" action="/providers/{{.ID}}/official/login/start"><button class="button ghost small" type="submit">启动登录</button></form>
+        {{end}}
+        <a class="button ghost small" href="/providers/{{.ID}}/edit">编辑</a>
+        <form method="post" action="/providers/{{.ID}}/delete" onsubmit="return confirm('确认删除该官方账号配置？');"><button class="button ghost-danger small" type="submit">删除</button></form>
+        {{if not (isActive $.ActiveIDs .)}}
+        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit" {{if not $state.AuthExists}}disabled{{end}}>切换使用</button></form>
+        {{end}}
+      </div>
+
+    </article>
+    {{else}}
+    <article class="provider-empty">暂无 Codex 官方订阅账号</article>
+    {{end}}
+  </div>
+</section>
+
+<section class="provider-section provider-tab-panel" data-tab-panel="claude-gateway">
+  <div class="section-head">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <h2 style="margin:0;">Claude Code 中转站</h2>
       <div class="tooltip-wrap right">
         <span class="tooltip-icon">i</span>
         <div class="tooltip-content">配置将应用至 <code>~/.claude/settings.json</code>。新增后请先测试连通性。</div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
-      <div class="section-badge">当前生效: <strong>{{if .ActiveClaude}}{{.ActiveClaude.Name}}{{else}}未配置{{end}}</strong> · {{providerCount .ClaudeProviders}}</div>
-      <a class="button secondary small" href="/providers/new?kind=claude">新增 Claude</a>
+      <div class="section-badge">当前生效: <strong>{{if and .ActiveClaude (isGateway .ActiveClaude)}}{{.ActiveClaude.Name}}{{else}}未选中本组{{end}}</strong> · {{providerCount .ClaudeGatewayProviders}}</div>
+      <a class="button secondary small" href="/providers/new?kind=claude&source=gateway">新增 Claude 中转</a>
     </div>
   </div>
 
   <div class="provider-list">
-    {{range .ClaudeProviders}}
+    {{range .ClaudeGatewayProviders}}
     <article class="provider-row {{if isActive $.ActiveIDs .}}provider-row-active{{end}}">
       <div class="row-main">
         <div class="row-header">
@@ -120,10 +189,178 @@
       </div>
     </article>
     {{else}}
-    <article class="provider-empty">暂无 Claude Code 供应商</article>
+    <article class="provider-empty">暂无 Claude Code 中转配置</article>
     {{end}}
   </div>
 </section>
+
+<section class="provider-section provider-tab-panel" data-tab-panel="claude-official">
+  <div class="section-head">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <h2 style="margin:0;">Claude Code 官方</h2>
+      <div class="tooltip-wrap right">
+        <span class="tooltip-icon">i</span>
+        <div class="tooltip-content">每个官方账号都会分配独立 <code>HOME</code> / <code>~/.claude</code>。登录流程由 WebUI 启动，用户只需在浏览器完成授权，再把页面显示的授权码粘贴回来。</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="section-badge">当前生效: <strong>{{if and .ActiveClaude (isOfficial .ActiveClaude)}}{{.ActiveClaude.Name}}{{else}}未选中本组{{end}}</strong> · {{providerCount .ClaudeOfficialProviders}}</div>
+      <a class="button secondary small" href="/providers/new?kind=claude&source=official">新增官方账号</a>
+    </div>
+  </div>
+
+  <div class="provider-list">
+    {{range .ClaudeOfficialProviders}}
+    {{$state := index $.ClaudeOfficialStates .ID}}
+    <article class="provider-row {{if isActive $.ActiveIDs .}}provider-row-active{{end}}">
+      <div class="row-main">
+        <div class="row-header">
+          <div class="row-title">
+            <strong>{{.Name}}</strong>
+            {{if isActive $.ActiveIDs .}}<span class="pill active">当前使用</span>{{end}}
+            {{if $state.AuthExists}}<span class="pill status-ok">已写入认证</span>{{else}}<span class="pill status-neutral">未登录</span>{{end}}
+          </div>
+          <code class="row-url">{{truncateText $state.HomePath 84}}</code>
+        </div>
+        <div class="row-meta">
+          <span class="meta-pill">模型: {{if .Model}}{{.Model}}{{else}}跟随该账号配置{{end}}</span>
+          <span class="meta-pill">权限模式: {{.ClaudeDefaultMode}}</span>
+          {{if .ClaudeSkipDangerousPrompt}}<span class="meta-pill">跳过危险确认</span>{{end}}
+          {{if .ClaudeUseSandbox}}<span class="meta-pill">IS_SANDBOX=1</span>{{end}}
+          <span class="meta-pill">隔离目录: {{if $state.AuthExists}}已准备{{else}}待登录{{end}}</span>
+        </div>
+        <div class="row-result" style="display:flex;align-items:center;gap:6px;font-size:11px;">
+          <span class="muted">登录检查</span>
+          <span class="row-result-brief">{{testStatusLabel .LastTestStatus .LastTestMessage}}</span>
+          {{if .LastTestMessage}}
+          <div class="tooltip-wrap">
+             <span class="tooltip-icon" style="cursor:zoom-in;">+</span>
+             <div class="tooltip-content" style="white-space:pre-wrap;max-width:420px;">{{.LastTestMessage}}</div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      <div class="row-actions">
+        <form method="post" action="/providers/{{.ID}}/official/status"><button class="button ghost small" type="submit">检查登录</button></form>
+        {{if $state.CanCancelLogin}}
+        <form method="post" action="/providers/{{.ID}}/official/login/cancel"><button class="button ghost small" type="submit">取消登录</button></form>
+        {{else}}
+        <form method="post" action="/providers/{{.ID}}/official/login/start"><button class="button ghost small" type="submit">启动登录</button></form>
+        {{end}}
+        <a class="button ghost small" href="/providers/{{.ID}}/edit">编辑</a>
+        <form method="post" action="/providers/{{.ID}}/delete" onsubmit="return confirm('确认删除该官方账号配置？');"><button class="button ghost-danger small" type="submit">删除</button></form>
+        {{if not (isActive $.ActiveIDs .)}}
+        <form method="post" action="/providers/{{.ID}}/switch"><button class="button small" type="submit" {{if not $state.AuthExists}}disabled{{end}}>切换使用</button></form>
+        {{end}}
+      </div>
+    </article>
+    {{else}}
+    <article class="provider-empty">暂无 Claude Code 官方订阅账号</article>
+    {{end}}
+  </div>
+</section>
+
+{{if and .CodexOfficialLoginProvider .CodexOfficialLoginState}}
+<div class="modal-shell">
+  <div class="modal-scrim"></div>
+  <section class="modal-card" style="max-width:880px;">
+    <div class="modal-head">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div>
+          <h2 style="margin:0;">官方账号登录 · {{.CodexOfficialLoginProvider.Name}}</h2>
+          <p class="muted" style="margin:4px 0 0;">{{.CodexOfficialLoginProvider.Name}} 的独立 CODEX_HOME: {{.CodexOfficialLoginState.HomePath}}</p>
+        </div>
+        <div class="tooltip-wrap bottom-left">
+          <span class="tooltip-icon">i</span>
+          <div class="tooltip-content">浏览器授权页完成后，最终会落到你本地的 <code>localhost:1455</code> 失败页。把地址栏里的完整链接粘贴回来，服务端会代你转发到服务器本机的 Codex 登录回调口。</div>
+        </div>
+      </div>
+      <form method="post" action="/providers/{{.CodexOfficialLoginProvider.ID}}/official/login/cancel" style="margin:0;">
+        <button class="button ghost" type="submit">取消登录</button>
+      </form>
+    </div>
+
+    <div style="display:grid;gap:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+        <div>
+          <strong style="display:block;font-size:13px;">浏览器授权进行中</strong>
+          <p class="muted" style="margin:6px 0 0;font-size:12px;line-height:1.7;">1. 在本地浏览器打开下方链接并完成登录。2. 浏览器会跳到 <code>http://localhost:1455/auth/callback?... </code> 失败页。3. 复制该失败页地址栏中的完整 URL，粘贴到下方提交。</p>
+        </div>
+        <span class="pill status-neutral">{{if .CodexOfficialLoginState.AwaitingCallback}}等待回调链接{{else}}准备授权链接{{end}}</span>
+      </div>
+
+      <label>
+        <span class="muted">授权链接</span>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <textarea id="official-login-url-modal" readonly style="min-height:92px;resize:vertical;">{{.CodexOfficialLoginState.LoginURL}}</textarea>
+          <button class="button secondary small" type="button" data-copy-target="#official-login-url-modal">复制</button>
+        </div>
+      </label>
+
+      <form method="post" action="/providers/{{.CodexOfficialLoginProvider.ID}}/official/login/complete" style="display:grid;gap:10px;">
+        <label>
+          <span class="muted">浏览器最终回调链接</span>
+          <textarea name="callback_url" placeholder="http://localhost:1455/auth/callback?code=...&state=..." style="min-height:110px;resize:vertical;" required></textarea>
+        </label>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="button secondary" type="submit" {{if not .CodexOfficialLoginState.CanSubmitCallback}}disabled{{end}}>提交回调并完成认证</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+{{end}}
+
+{{if and .ClaudeOfficialLoginProvider .ClaudeOfficialLoginState}}
+<div class="modal-shell">
+  <div class="modal-scrim"></div>
+  <section class="modal-card" style="max-width:880px;">
+    <div class="modal-head">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div>
+          <h2 style="margin:0;">官方账号登录 · {{.ClaudeOfficialLoginProvider.Name}}</h2>
+          <p class="muted" style="margin:4px 0 0;">{{.ClaudeOfficialLoginProvider.Name}} 的独立 HOME: {{.ClaudeOfficialLoginState.HomePath}}</p>
+        </div>
+        <div class="tooltip-wrap bottom-left">
+          <span class="tooltip-icon">i</span>
+          <div class="tooltip-content">Claude 官方登录页会展示一段授权码。复制该授权码粘贴回来即可；如果你复制的是完整 URL，系统也会自动提取其中的 <code>code</code> 参数。</div>
+        </div>
+      </div>
+      <form method="post" action="/providers/{{.ClaudeOfficialLoginProvider.ID}}/official/login/cancel" style="margin:0;">
+        <button class="button ghost" type="submit">取消登录</button>
+      </form>
+    </div>
+
+    <div style="display:grid;gap:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+        <div>
+          <strong style="display:block;font-size:13px;">浏览器授权进行中</strong>
+          <p class="muted" style="margin:6px 0 0;font-size:12px;line-height:1.7;">1. 在浏览器打开下方链接并登录 Claude 账号。2. 授权完成后，页面会展示一段授权码。3. 复制授权码粘贴到下方提交。</p>
+        </div>
+        <span class="pill status-neutral">{{if .ClaudeOfficialLoginState.AwaitingCode}}等待授权码{{else}}准备授权链接{{end}}</span>
+      </div>
+
+      <label>
+        <span class="muted">授权链接</span>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <textarea id="claude-official-login-url-modal" readonly style="min-height:92px;resize:vertical;">{{.ClaudeOfficialLoginState.LoginURL}}</textarea>
+          <button class="button secondary small" type="button" data-copy-target="#claude-official-login-url-modal">复制</button>
+        </div>
+      </label>
+
+      <form method="post" action="/providers/{{.ClaudeOfficialLoginProvider.ID}}/official/login/complete" style="display:grid;gap:10px;">
+        <label>
+          <span class="muted">授权码</span>
+          <textarea name="auth_code" placeholder="粘贴 Claude 页面显示的授权码，或完整 URL" style="min-height:110px;resize:vertical;" required></textarea>
+        </label>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button class="button secondary" type="submit" {{if not .ClaudeOfficialLoginState.CanSubmitCode}}disabled{{end}}>提交授权码并完成认证</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+{{end}}
 
 {{if .Probe}}
 <div class="modal-shell">

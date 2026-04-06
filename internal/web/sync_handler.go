@@ -94,7 +94,7 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := s.exportProvidersJSON()
+	data, err := s.exportFullBackupJSON()
 	if err != nil {
 		s.redirectWithMessage(w, r, "/sync", "", "导出数据失败: "+err.Error())
 		return
@@ -146,13 +146,13 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := decodeProviderTransfer(data)
+	payload, err := decodeAnyBackup(data)
 	if err != nil {
 		s.redirectWithMessage(w, r, "/sync", "", "解析远端数据失败: "+err.Error())
 		return
 	}
 
-	result, err := s.importProviderTransfer(payload, true)
+	result, err := s.importFullBackup(payload, true)
 	if err != nil {
 		s.redirectWithMessage(w, r, "/sync", "", "导入失败: "+err.Error())
 		return
@@ -163,20 +163,11 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		st.LastError = ""
 	})
 
-	s.redirectWithMessage(w, r, "/sync", "拉取完成: "+result.summary(), "")
-}
-
-func (s *Server) exportProvidersJSON() ([]byte, error) {
-	providers, err := s.store.ListProviders("")
-	if err != nil {
-		return nil, err
+	summary := result.summary()
+	if summary == "" {
+		summary = "导入完成，文件中没有可识别的数据"
 	}
-	activeIDs, err := s.store.ListActiveProviderIDs()
-	if err != nil {
-		return nil, err
-	}
-	payload := buildProviderTransferFile(providers, activeIDs)
-	return marshalJSON(payload)
+	s.redirectWithMessage(w, r, "/sync", "拉取完成: "+summary, "")
 }
 
 func (s *Server) updateSyncStatus(fn func(*cloudsync.SyncStatus)) {
@@ -229,7 +220,7 @@ func (s *Server) autoSyncLoop() {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		data, err := s.exportProvidersJSON()
+		data, err := s.exportFullBackupJSON()
 		if err != nil {
 			cancel()
 			s.logger.Printf("[sync] export failed: %v", err)

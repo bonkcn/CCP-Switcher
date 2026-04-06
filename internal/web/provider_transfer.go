@@ -28,9 +28,10 @@ type providerTransferFile struct {
 type providerTransferRecord struct {
 	UID                       string `json:"uid,omitempty"`
 	Kind                      string `json:"kind"`
+	Source                    string `json:"source,omitempty"`
 	Name                      string `json:"name"`
-	BaseURL                   string `json:"base_url"`
-	Secret                    string `json:"secret"`
+	BaseURL                   string `json:"base_url,omitempty"`
+	Secret                    string `json:"secret,omitempty"`
 	Model                     string `json:"model,omitempty"`
 	ReasoningEffort           string `json:"reasoning_effort,omitempty"`
 	CodexApprovalPolicy       string `json:"codex_approval_policy,omitempty"`
@@ -194,7 +195,7 @@ func validateProviderTransfer(payload *providerTransferFile) error {
 			seenUID[record.UID] = struct{}{}
 		}
 
-		key := providerKindNameKey(record.Kind, record.Name)
+		key := providerKindNameKey(record.Kind, record.Source, record.Name)
 		if _, exists := seenKindName[key]; exists {
 			return fmt.Errorf("导入文件中存在重复供应商: %s / %s", kindLabel(record.Kind), record.Name)
 		}
@@ -227,6 +228,7 @@ func transferRecordToProvider(record providerTransferRecord) (store.Provider, er
 	provider := store.Provider{
 		UID:                       strings.TrimSpace(record.UID),
 		Kind:                      strings.TrimSpace(record.Kind),
+		Source:                    strings.TrimSpace(record.Source),
 		Name:                      strings.TrimSpace(record.Name),
 		BaseURL:                   record.BaseURL,
 		Secret:                    strings.TrimSpace(record.Secret),
@@ -245,6 +247,7 @@ func providerTransferRecordFromProvider(provider store.Provider) providerTransfe
 	record := providerTransferRecord{
 		UID:                       strings.TrimSpace(provider.UID),
 		Kind:                      strings.TrimSpace(provider.Kind),
+		Source:                    strings.TrimSpace(provider.Source),
 		Name:                      strings.TrimSpace(provider.Name),
 		BaseURL:                   normalizeBaseURL(provider.BaseURL),
 		Secret:                    strings.TrimSpace(provider.Secret),
@@ -285,7 +288,7 @@ func (s *Server) importProviderTransfer(payload providerTransferFile, restoreAct
 		if provider.UID != "" {
 			existingByUID[provider.UID] = provider
 		}
-		key := providerKindNameKey(provider.Kind, provider.Name)
+		key := providerKindNameKey(provider.Kind, provider.Source, provider.Name)
 		existingByKindName[key] = append(existingByKindName[key], provider)
 	}
 
@@ -403,6 +406,10 @@ func (r providerImportResult) summary() string {
 func normalizeProviderInput(provider store.Provider) (store.Provider, error) {
 	provider.UID = strings.TrimSpace(provider.UID)
 	provider.Kind = strings.TrimSpace(provider.Kind)
+	provider.Source = strings.TrimSpace(provider.Source)
+	if provider.Source == "" {
+		provider.Source = store.ProviderSourceGateway
+	}
 	provider.Name = strings.TrimSpace(provider.Name)
 	provider.BaseURL = normalizeBaseURL(provider.BaseURL)
 	provider.Secret = strings.TrimSpace(provider.Secret)
@@ -418,6 +425,9 @@ func normalizeProviderInput(provider store.Provider) (store.Provider, error) {
 	if provider.Kind != "claude" && provider.Kind != "codex" {
 		return provider, fmt.Errorf("provider kind must be claude or codex")
 	}
+	if provider.Source != store.ProviderSourceGateway && provider.Source != store.ProviderSourceOfficial {
+		return provider, fmt.Errorf("provider source must be gateway or official")
+	}
 	if provider.Kind == "codex" {
 		if !isAllowedValue(provider.CodexApprovalPolicy, "", "untrusted", "on-failure", "on-request", "never") {
 			return provider, fmt.Errorf("invalid approval policy")
@@ -432,11 +442,15 @@ func normalizeProviderInput(provider store.Provider) (store.Provider, error) {
 	if provider.Name == "" {
 		return provider, fmt.Errorf("provider name is required")
 	}
-	if provider.BaseURL == "" {
+	if provider.Source == store.ProviderSourceGateway && provider.BaseURL == "" {
 		return provider, fmt.Errorf("base URL is required")
 	}
-	if provider.Secret == "" {
+	if provider.Source == store.ProviderSourceGateway && provider.Secret == "" {
 		return provider, fmt.Errorf("API key or token is required")
+	}
+	if provider.Source == store.ProviderSourceOfficial {
+		provider.BaseURL = ""
+		provider.Secret = ""
 	}
 	return provider, nil
 }
@@ -448,7 +462,7 @@ func matchImportedProvider(existingByUID map[string]store.Provider, existingByKi
 		}
 	}
 
-	candidates := existingByKindName[providerKindNameKey(provider.Kind, provider.Name)]
+	candidates := existingByKindName[providerKindNameKey(provider.Kind, provider.Source, provider.Name)]
 	switch len(candidates) {
 	case 0:
 		return store.Provider{}, false, nil
@@ -463,8 +477,8 @@ func providerKinds() []string {
 	return []string{"claude", "codex"}
 }
 
-func providerKindNameKey(kind string, name string) string {
-	return strings.TrimSpace(kind) + "\n" + strings.TrimSpace(name)
+func providerKindNameKey(kind string, source string, name string) string {
+	return strings.TrimSpace(kind) + "\n" + strings.TrimSpace(source) + "\n" + strings.TrimSpace(name)
 }
 
 func providerImportFormError(err error) string {

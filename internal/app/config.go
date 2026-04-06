@@ -2,7 +2,9 @@ package app
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type Config struct {
@@ -14,6 +16,8 @@ type Config struct {
 	ClaudeSettingsPath       string
 	CodexConfigPath          string
 	CodexAuthPath            string
+	CodexAccountsDir         string
+	ClaudeAccountsDir        string
 	ClaudeCommand            string
 	CodexCommand             string
 	DefaultWorkdir           string
@@ -33,8 +37,10 @@ func LoadConfig() Config {
 		ClaudeSettingsPath:       getenv("CCP_SWITCHER_CLAUDE_SETTINGS", "/root/.claude/settings.json"),
 		CodexConfigPath:          getenv("CCP_SWITCHER_CODEX_CONFIG", "/root/.codex/config.toml"),
 		CodexAuthPath:            getenv("CCP_SWITCHER_CODEX_AUTH", "/root/.codex/auth.json"),
-		ClaudeCommand:            getenv("CCP_SWITCHER_CLAUDE_CMD", "claude"),
-		CodexCommand:             getenv("CCP_SWITCHER_CODEX_CMD", "codex"),
+		CodexAccountsDir:         getenv("CCP_SWITCHER_CODEX_ACCOUNTS_DIR", filepath.Join(dataDir, "accounts", "codex")),
+		ClaudeAccountsDir:        getenv("CCP_SWITCHER_CLAUDE_ACCOUNTS_DIR", filepath.Join(dataDir, "accounts", "claude")),
+		ClaudeCommand:            commandPath("CCP_SWITCHER_CLAUDE_CMD", "/root/.local/bin/claude", "claude"),
+		CodexCommand:             commandPath("CCP_SWITCHER_CODEX_CMD", "", "codex"),
 		DefaultWorkdir:           getenv("CCP_SWITCHER_WORKDIR", "/root"),
 		CertDir:                  getenv("CCP_SWITCHER_CERT_DIR", filepath.Join(dataDir, "certs")),
 		ServiceFilePath:          getenv("CCP_SWITCHER_SERVICE_PATH", "/etc/systemd/system/ccp-switcher.service"),
@@ -44,6 +50,21 @@ func LoadConfig() Config {
 func getenv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return fallback
+}
+
+func commandPath(key string, preferred string, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	if preferred != "" {
+		if _, err := os.Stat(preferred); err == nil {
+			return preferred
+		}
+	}
+	if resolved, err := exec.LookPath(fallback); err == nil {
+		return resolved
 	}
 	return fallback
 }
