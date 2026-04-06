@@ -15,12 +15,12 @@ const (
 )
 
 type fullBackupFile struct {
-	Type         string                   `json:"type"`
-	Version      int                      `json:"version"`
-	ExportedAt   string                   `json:"exported_at,omitempty"`
-	Providers    *providerTransferFile    `json:"providers,omitempty"`
-	SyncConfig   *syncConfigTransfer      `json:"sync_config,omitempty"`
-	SiteSettings *siteSettingsTransfer    `json:"site_settings,omitempty"`
+	Type         string                `json:"type"`
+	Version      int                   `json:"version"`
+	ExportedAt   string                `json:"exported_at,omitempty"`
+	Providers    *providerTransferFile `json:"providers,omitempty"`
+	SyncConfig   *syncConfigTransfer   `json:"sync_config,omitempty"`
+	SiteSettings *siteSettingsTransfer `json:"site_settings,omitempty"`
 }
 
 type syncConfigTransfer struct {
